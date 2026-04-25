@@ -1,0 +1,19 @@
+# Patch: Add mDNS/ciao fix preload to nemoclaw-start.sh
+#
+# File: scripts/nemoclaw-start.sh
+#
+# Problem: homebridge/ciao crashes on os.networkInterfaces() inside
+# OpenShell's restricted netns. Gateway dies 20ms after starting.
+#
+# Add these lines AFTER the nemotron fix script section
+# (after: export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--require $_NEMOTRON_FIX_SCRIPT"):
+
+cat << 'SNIPPET'
+# mDNS/ciao netns fix
+_MDNS_FIX_SCRIPT="/tmp/nemoclaw-mdns-fix.js"
+cat > "$_MDNS_FIX_SCRIPT" << 'MDNS_FIX_EOF'
+(function(){'use strict';var os=require('os');var _ni=os.networkInterfaces;os.networkInterfaces=function(){try{return _ni.call(os);}catch(e){if(e.code==='ERR_SYSTEM_ERROR'||String(e).indexOf('uv_interface_addresses')!==-1){process.stderr.write('[nemoclaw-mdns-fix] netns patch active\n');return {};}throw e;}};})();
+MDNS_FIX_EOF
+chmod 444 "$_MDNS_FIX_SCRIPT" 2>/dev/null || true
+export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--require $_MDNS_FIX_SCRIPT"
+SNIPPET

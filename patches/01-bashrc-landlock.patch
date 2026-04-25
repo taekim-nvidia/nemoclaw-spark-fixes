@@ -1,0 +1,22 @@
+# Patch: Make .bashrc writes non-fatal under OpenShell Landlock
+#
+# File: scripts/nemoclaw-start.sh
+#
+# Problem: Landlock blocks writes to /sandbox/.bashrc even when UNIX
+# permissions allow it. Under set -euo pipefail, the failed write exits
+# the entire startup script before the gateway launches.
+#
+# Apply manually — find these two printf/cat lines in export_gateway_token
+# and source_proxy_config_to_rc, add "2>/dev/null || true" to each:
+
+# BEFORE:
+#   cat "$tmp" >"$rc_file"
+#   ...
+#   printf '\n%s\n' "$snippet" >>"$rc_file"
+#
+# AFTER:
+#   cat "$tmp" >"$rc_file" 2>/dev/null || true
+#   ...
+#   printf '\n%s\n' "$snippet" >>"$rc_file" 2>/dev/null || true
+
+echo "See README for context. Apply manually to ~/.nemoclaw/source/scripts/nemoclaw-start.sh"

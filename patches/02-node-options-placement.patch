@@ -1,0 +1,19 @@
+# Patch: Move NODE_OPTIONS ENV to after all build steps in Dockerfile
+#
+# File: Dockerfile
+#
+# Problem: ENV NODE_OPTIONS=... before Step 45 (openclaw doctor --fix)
+# causes the doctor to run with that env, which alters .bashrc permissions
+# from 444 to 644. At runtime, Landlock then blocks writes and the startup
+# script fails (Bug 4).
+#
+# WRONG (before Step 45):
+#   ENV NEMOCLAW_WEB_SEARCH_ENABLED=${NEMOCLAW_WEB_SEARCH_ENABLED} \
+#       NODE_OPTIONS="--unhandled-rejections=warn"
+#
+# CORRECT (after Step 51, before ENTRYPOINT):
+#   RUN chown root:root /sandbox/.nemoclaw ...  # Step 51
+#   ENV NODE_OPTIONS="--unhandled-rejections=warn"  # <-- here
+#   ENTRYPOINT ["/usr/local/bin/nemoclaw-start"]
+
+echo "See README for context. Apply manually to ~/.nemoclaw/source/Dockerfile"
