@@ -6,14 +6,14 @@
 <title>Парк Галицкого</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
-body{background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;height:100dvh;height:100vh;font-family:Georgia,serif;overflow:hidden;touch-action:none;}
-#title{color:#f0e68c;font-size:12px;letter-spacing:1px;margin:3px 0 2px;text-align:center;flex-shrink:0;}
-#wrap{position:relative;flex-shrink:0;}
-#canvas{border:2px solid #4a7c4a;border-radius:4px;display:block;}
-#info{position:absolute;bottom:175px;left:50%;transform:translateX(-50%);color:#f0e68c;font-size:11px;text-align:center;background:rgba(0,0,0,.7);padding:2px 8px;border-radius:8px;white-space:nowrap;max-width:96%;overflow:hidden;text-overflow:ellipsis;pointer-events:none;z-index:10;}
-#dpad{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(3,52px);gap:5px;z-index:10;}
-.db{background:rgba(40,80,40,.85);border:2px solid #4a7c4a;border-radius:10px;color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none;}
-.db:active{background:rgba(80,140,80,1);}
+body{margin:0;padding:0;background:#000;overflow:hidden;touch-action:none;}
+#wrap{position:fixed;top:0;left:0;width:100%;height:100%;}
+#canvas{position:absolute;top:0;left:50%;transform:translateX(-50%);}
+#title{position:absolute;top:4px;left:50%;transform:translateX(-50%);color:#f0e68c;font-size:11px;white-space:nowrap;background:rgba(0,0,0,.5);padding:1px 8px;border-radius:8px;pointer-events:none;z-index:5;}
+#info{position:absolute;bottom:178px;left:50%;transform:translateX(-50%);color:#f0e68c;font-size:11px;text-align:center;background:rgba(0,0,0,.7);padding:2px 8px;border-radius:8px;white-space:nowrap;max-width:98%;overflow:hidden;text-overflow:ellipsis;pointer-events:none;z-index:10;}
+#dpad{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:grid;grid-template-columns:repeat(3,54px);grid-template-rows:repeat(3,54px);gap:5px;z-index:10;}
+.db{background:rgba(40,80,40,.85);border:2px solid #4a7c4a;border-radius:12px;color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none;}
+.db:active{background:rgba(80,150,80,1);}
 #du{grid-column:2;grid-row:1;}
 #dl{grid-column:1;grid-row:2;}
 #da{grid-column:2;grid-row:2;background:rgba(160,40,40,.9);border-color:#c04040;font-size:18px;}
@@ -23,9 +23,9 @@ body{background:#1a1a2e;display:flex;flex-direction:column;align-items:center;ju
 </style>
 </head>
 <body>
-<div id="title">🌿 ПАРК ГАЛИЦКОГО · КРАСНОДАР 🌿</div>
 <div id="wrap">
 <canvas id="canvas"></canvas>
+<div id="title">🌿 ПАРК ГАЛИЦКОГО · КРАСНОДАР 🌿</div>
 <div id="info">Добро пожаловать!</div>
 <div id="dpad">
   <button class="db" id="du">▲</button>
@@ -36,8 +36,8 @@ body{background:#1a1a2e;display:flex;flex-direction:column;align-items:center;ju
 </div>
 </div>
 <script>
-const W=Math.min(window.innerWidth-8,400);
-const H=Math.min(window.innerHeight-28,580);
+const W=Math.min(window.innerWidth,420);
+const H=window.innerHeight;
 const cv=document.getElementById('canvas');
 cv.width=W;cv.height=H;
 const c=cv.getContext('2d');
