@@ -78,7 +78,7 @@ body{background:#000;display:flex;align-items:center;justify-content:flex-start;
 </div>
 
 <!-- Cutscene overlay -->
-<div id="cutscene">
+<div id="cutscene" onclick="advanceCutscene()" style="cursor:pointer;">
   <div id="cs-year"></div>
   <div id="cs-text"></div>
   <div id="cs-tap">Нажми чтобы продолжить</div>
@@ -713,6 +713,9 @@ function loop(){
   requestAnimationFrame(loop);
   for(const k in JP)delete JP[k];
 }
+
+// Touch on cutscene div
+document.getElementById('cutscene').addEventListener('touchstart',e=>{e.preventDefault();advanceCutscene();},{passive:false});
 
 // ═══════════ START ═══════════
 showCutscene(0);
