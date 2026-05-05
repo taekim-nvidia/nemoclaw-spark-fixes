@@ -70,6 +70,7 @@ const miniZ=[
   {id:'rope',  x:1050,y:880,w:90,h:70, col:'#804010',em:'🪢',lb:'Верёвочный парк',pr:'🪢 Нажми 🎮 чтобы пройти!'},
   {id:'climb', x:1050,y:780,w:90,h:80, col:'#a05020',em:'🧗',lb:'Скалодром',    pr:'🧗 Нажми 🎮 чтобы залезть!'},
   {id:'music', x:1100,y:680,w:180,h:120,col:'#7040b0',em:'🎵',lb:'Музыкальный лабиринт',pr:'🎵 Нажми 🎮 чтобы войти!'},
+  {id:'burger',x:1230,y:680,w:70,h:55,col:'#6b3a1f',em:'🍔',lb:'Burger Bar',pr:'🍔 Нажми 🎮 чтобы готовить!'},
 ];
 const staticZ=[
   {x:50,y:50,w:550,h:580,col:'#2d8a4a',em:'🇯🇵',lb:'Японский сад'},
@@ -79,7 +80,7 @@ const staticZ=[
   {x:580,y:120,w:150,h:60,col:'#4ab8e8',em:'⛲',lb:'Плоскостной фонтан (удалён из static)'},
   {x:300,y:780,w:130,h:130,col:'#e060a0',em:'🌸',lb:'Цветочный сад'},
   {x:100,y:680,w:70,h:55,col:'#6b3a1f',em:'☕',lb:'Кафе Краснодар'},
-  {x:1230,y:680,w:70,h:55,col:'#6b3a1f',em:'🍔',lb:'Burger Bar'},
+
   {x:660,y:300,w:80,h:80,col:'#d4af37',em:'📍',lb:'Арт-объект «Геолокация»'},
   {x:660,y:640,w:80,h:80,col:'#b8860b',em:'🐂',lb:'Скульптура «Бык»'},
   {x:1200,y:50,w:180,h:180,col:'#2244aa',em:'⚽',lb:'Стадион Ozon Арена'},
@@ -176,7 +177,8 @@ function enterMini(id){
   if(id==='skate')iSkate();else if(id==='basket')iBasket();
   else if(id==='rope')iRope();else if(id==='climb')iClimb();
   else if(id==='music')iMusic();
-  document.getElementById('title').textContent={skate:'🛹 СКЕЙТ-ПАРК',basket:'🏀 БАСКЕТБОЛ',rope:'🪢 ВЕРЁВОЧНЫЙ ПАРК',climb:'🧗 СКАЛОДРОМ',music:'🎵 МУЗЫКАЛЬНЫЙ ЛАБИРИНТ'}[id];
+  else if(id==='burger')iBurger();
+  document.getElementById('title').textContent={skate:'🛹 СКЕЙТ-ПАРК',basket:'🏀 БАСКЕТБОЛ',rope:'🪢 ВЕРЁВОЧНЫЙ ПАРК',climb:'🧗 СКАЛОДРОМ',music:'🎵 МУЗЫКАЛЬНЫЙ ЛАБИРИНТ',burger:'🍔 BURGER BAR'}[id];
 }
 function exitMini(){state='park';document.getElementById('title').textContent='🌿 ПАРК ГАЛИЦКОГО 🌿';document.getElementById('info').textContent='Вернулись в парк';}
 function drwExit(){c.fillStyle='rgba(0,0,0,.65)';c.fillRect(4,4,72,22);c.fillStyle='#fff';c.font='11px sans-serif';c.textAlign='left';c.fillText('◀ ВЫХОД',9,19);}
@@ -705,6 +707,95 @@ function drwMusic(){
 }
 
 // ═══════════════════════════════════════════════
+// BURGER BAR
+// ═══════════════════════════════════════════════
+const RECIPE=['🍞','🥩','🧀','🥬','🍅','🍞'];
+const ING_COLORS={'🍞':'#d4a056','🥩':'#8B2500','🧀':'#FFD700','🥬':'#2d8a2d','🍅':'#cc2200'};
+let BG={};
+function iBurger(){
+  BG={tray:{x:W/2,w:70},falling:[],stack:[],score:0,next:0,
+    spawnT:0,spawnInterval:80,msg:'',msgT:0,done:false};
+  spawnIngredient();
+}
+function spawnIngredient(){
+  const ing=RECIPE[BG.next%RECIPE.length];
+  BG.falling.push({x:20+Math.random()*(W-40),y:-20,vy:2.5+BG.score*.15,ing,hint:BG.next%RECIPE.length===0&&BG.next>0});
+}
+function uBurger(){
+  if(BG.done){if(JP.action)iBurger();return;}
+  if(K.ArrowLeft)BG.tray.x=Math.max(BG.tray.w/2+5,BG.tray.x-4);
+  if(K.ArrowRight)BG.tray.x=Math.min(W-BG.tray.w/2-5,BG.tray.x+4);
+  BG.spawnT++;
+  for(let i=BG.falling.length-1;i>=0;i--){
+    const f=BG.falling[i];f.y+=f.vy;
+    // catch
+    if(f.y>H-50&&f.y<H-30&&Math.abs(f.x-BG.tray.x)<BG.tray.w/2+10){
+      const expected=RECIPE[BG.next%RECIPE.length];
+      if(f.ing===expected){
+        BG.stack.push(f.ing);BG.next++;BG.falling.splice(i,1);
+        BG.msg='✅ '+f.ing;BG.msgT=45;
+        if(BG.next%RECIPE.length===0){
+          BG.score++;BG.stack=[];BG.msg='🎉 Бургер готов! +1';BG.msgT=90;
+          if(BG.score>=3){BG.done=true;}
+        }
+        spawnIngredient();
+      }else{
+        BG.stack=[];BG.next=Math.floor(BG.next/RECIPE.length)*RECIPE.length;
+        BG.falling.splice(i,1);BG.msg='❌ Не тот ингредиент!';BG.msgT=55;
+        spawnIngredient();
+      }
+    }else if(f.y>H+10){BG.falling.splice(i,1);spawnIngredient();}
+  }
+  if(BG.msgT>0)BG.msgT--;else BG.msg='';
+  const need=RECIPE[BG.next%RECIPE.length];
+  document.getElementById('info').textContent=BG.done?'🏆 3 бургера! | Касание ВЫХОД':'Лови: '+need+' | ◀▶ двигай поднос | Бургеров: '+BG.score+'/3';
+}
+function drwBurger(){
+  // Background - cozy cafe
+  const bg=c.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#3d1a0a');bg.addColorStop(1,'#1a0a00');
+  c.fillStyle=bg;c.fillRect(0,0,W,H);
+  // Counter
+  c.fillStyle='#5a3010';c.fillRect(0,H-45,W,45);
+  c.fillStyle='#7a4a20';c.fillRect(0,H-48,W,6);
+  // Menu board
+  c.fillStyle='#2a1500';c.fillRect(W/2-80,10,160,55);
+  c.strokeStyle='#8B6914';c.lineWidth=2;c.strokeRect(W/2-80,10,160,55);
+  c.fillStyle='#ffd700';c.font='bold 11px sans-serif';c.textAlign='center';
+  c.fillText('📋 РЕЦЕПТ',W/2,26);
+  c.font='16px sans-serif';
+  c.fillText(RECIPE.join(' '),W/2,48);
+  // Stack preview (what's been caught)
+  if(BG.stack.length>0){
+    c.fillStyle='rgba(0,0,0,.5)';c.fillRect(5,H-50-BG.stack.length*18-10,80,BG.stack.length*18+15);
+    c.fillStyle='#fff';c.font='11px sans-serif';c.textAlign='left';c.fillText('Стек:',8,H-50-BG.stack.length*18);
+    BG.stack.forEach((s,i)=>{c.font='14px sans-serif';c.fillText(s,8,H-50-(BG.stack.length-1-i)*18+12);});
+  }
+  // Next ingredient hint arrow
+  const need=RECIPE[BG.next%RECIPE.length];
+  c.fillStyle='#ffff00';c.font='bold 13px sans-serif';c.textAlign='center';
+  c.fillText('⬇ '+need,W/2,75);
+  // Falling ingredients
+  for(const f of BG.falling){
+    const col=ING_COLORS[f.ing]||'#aaa';
+    c.fillStyle=col;c.beginPath();c.ellipse(f.x,f.y,18,10,0,0,Math.PI*2);c.fill();
+    c.strokeStyle='rgba(0,0,0,.4)';c.lineWidth=1;c.stroke();
+    c.font='16px sans-serif';c.textAlign='center';c.fillText(f.ing,f.x,f.y+6);
+  }
+  // Tray
+  c.fillStyle='#c8a060';c.fillRect(BG.tray.x-BG.tray.w/2,H-44,BG.tray.w,8);
+  c.fillStyle='#ddb870';c.fillRect(BG.tray.x-BG.tray.w/2+2,H-44,BG.tray.w-4,3);
+  c.strokeStyle='#8B6914';c.lineWidth=1;c.strokeRect(BG.tray.x-BG.tray.w/2,H-44,BG.tray.w,8);
+  // Score
+  c.fillStyle='rgba(0,0,0,.55)';c.fillRect(W-90,5,85,24);
+  c.fillStyle='#ffd700';c.font='bold 13px sans-serif';c.textAlign='right';
+  c.fillText('🍔 '+BG.score+'/3',W-8,22);
+  // Message
+  if(BG.msg){c.font='bold 16px sans-serif';c.textAlign='center';c.strokeStyle='#000';c.lineWidth=3;c.strokeText(BG.msg,W/2,H/2);c.fillStyle='#ffff00';c.fillText(BG.msg,W/2,H/2);}
+  if(BG.done){c.fillStyle='rgba(0,0,0,.6)';c.fillRect(0,H/2-32,W,64);c.fillStyle='#ffd700';c.font='bold 20px sans-serif';c.textAlign='center';c.fillText('🏆 Шеф-повар! 3/3',W/2,H/2+8);}
+  drwExit();c.textAlign='left';
+}
+
+// ═══════════════════════════════════════════════
 // MAIN LOOP
 // ═══════════════════════════════════════════════
 function loop(){
@@ -715,6 +806,7 @@ function loop(){
   else if(state==='rope'){uRope();drwRope();}
   else if(state==='climb'){uClimb();drwClimb();}
   else if(state==='music'){uMusic();drwMusic();}
+  else if(state==='burger'){uBurger();drwBurger();}
   for(const k in JP)delete JP[k];
   requestAnimationFrame(loop);
 }
