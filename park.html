@@ -235,7 +235,8 @@ function drwSkater(x,y,dir,col,isP){
   c.beginPath();c.arc(0,-28,7,0,Math.PI*2);c.fillStyle='#f5c07a';c.fill();
   if(isP){c.beginPath();c.arc(0,-31,8,Math.PI,0);c.fillStyle='#cc2200';c.fill();}
   // Eyes
-  c.fillStyle='#333';c.beginPath();c.arc(2,-29,1.5,0,Math.PI*2);c.fill();
+  c.fillStyle='#333';c.beginPath();c.arc(-2,-29,1.5,0,Math.PI*2);c.fill();
+  c.beginPath();c.arc(3,-29,1.5,0,Math.PI*2);c.fill();
   c.restore();
 }
 function drwSkate(){
