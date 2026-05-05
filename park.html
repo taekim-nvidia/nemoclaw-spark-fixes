@@ -69,13 +69,14 @@ const miniZ=[
   {id:'basket',x:800,y:940,w:180,h:100,col:'#c86420',em:'🏀',lb:'Баскетбол',    pr:'🏀 Нажми 🎮 чтобы играть!'},
   {id:'rope',  x:1050,y:880,w:90,h:70, col:'#804010',em:'🪢',lb:'Верёвочный парк',pr:'🪢 Нажми 🎮 чтобы пройти!'},
   {id:'climb', x:1050,y:780,w:90,h:80, col:'#a05020',em:'🧗',lb:'Скалодром',    pr:'🧗 Нажми 🎮 чтобы залезть!'},
+  {id:'music', x:1100,y:680,w:180,h:120,col:'#7040b0',em:'🎵',lb:'Музыкальный лабиринт',pr:'🎵 Нажми 🎮 чтобы войти!'},
 ];
 const staticZ=[
   {x:50,y:50,w:550,h:580,col:'#2d8a4a',em:'🇯🇵',lb:'Японский сад'},
   {x:580,y:120,w:150,h:60,col:'#4ab8e8',em:'⛲',lb:'Плоскостной фонтан'},
   {x:450,y:680,w:300,h:160,col:'#8B6914',em:'🎭',lb:'Амфитеатр'},
   {x:880,y:200,w:200,h:180,col:'#2a90c0',em:'🌊',lb:'Водный лабиринт'},
-  {x:1100,y:680,w:180,h:120,col:'#7040b0',em:'🎵',lb:'Музыкальный лабиринт'},
+  {x:580,y:120,w:150,h:60,col:'#4ab8e8',em:'⛲',lb:'Плоскостной фонтан (удалён из static)'},
   {x:300,y:780,w:130,h:130,col:'#e060a0',em:'🌸',lb:'Цветочный сад'},
   {x:100,y:680,w:70,h:55,col:'#6b3a1f',em:'☕',lb:'Кафе Краснодар'},
   {x:1230,y:680,w:70,h:55,col:'#6b3a1f',em:'🍔',lb:'Burger Bar'},
@@ -174,7 +175,8 @@ function enterMini(id){
   state=id;
   if(id==='skate')iSkate();else if(id==='basket')iBasket();
   else if(id==='rope')iRope();else if(id==='climb')iClimb();
-  document.getElementById('title').textContent={skate:'🛹 СКЕЙТ-ПАРК',basket:'🏀 БАСКЕТБОЛ',rope:'🪢 ВЕРЁВОЧНЫЙ ПАРК',climb:'🧗 СКАЛОДРОМ'}[id];
+  else if(id==='music')iMusic();
+  document.getElementById('title').textContent={skate:'🛹 СКЕЙТ-ПАРК',basket:'🏀 БАСКЕТБОЛ',rope:'🪢 ВЕРЁВОЧНЫЙ ПАРК',climb:'🧗 СКАЛОДРОМ',music:'🎵 МУЗЫКАЛЬНЫЙ ЛАБИРИНТ'}[id];
 }
 function exitMini(){state='park';document.getElementById('title').textContent='🌿 ПАРК ГАЛИЦКОГО 🌿';document.getElementById('info').textContent='Вернулись в парк';}
 function drwExit(){c.fillStyle='rgba(0,0,0,.65)';c.fillRect(4,4,72,22);c.fillStyle='#fff';c.font='11px sans-serif';c.textAlign='left';c.fillText('◀ ВЫХОД',9,19);}
@@ -572,6 +574,137 @@ cv.addEventListener('click',e=>{const r=cv.getBoundingClientRect();const cx=(e.c
 cv.addEventListener('touchend',e=>{const r=cv.getBoundingClientRect();const t=e.changedTouches[0];const cx=(t.clientX-r.left)*(W/r.width),cy=(t.clientY-r.top)*(H/r.height);if(state!=='park'&&cx<80&&cy<28)exitMini();},{passive:true});
 
 // ═══════════════════════════════════════════════
+// MUSIC LABYRINTH
+// ═══════════════════════════════════════════════
+const ML_GRID=[
+  [0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,3,1,1,0,2,1,1,0,1,1,0],
+  [0,0,0,1,0,1,0,1,0,1,0,0],
+  [0,2,1,1,1,1,0,2,1,1,2,0],
+  [0,1,0,0,0,1,0,0,0,0,1,0],
+  [0,1,1,2,0,1,1,1,0,2,1,0],
+  [0,0,0,1,0,0,0,1,0,1,0,0],
+  [0,1,1,1,1,2,1,1,0,1,1,0],
+  [0,1,0,0,0,1,0,0,0,0,1,0],
+  [0,1,2,1,1,1,1,2,1,1,1,0],
+  [0,0,0,0,0,1,0,0,0,0,4,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0],
+];
+const ML_NOTES=[261,293,329,349,392,440,493,523,587,659];
+const ML_COLS=['#ff6b6b','#ffd166','#06d6a0','#118ab2','#a8dadc','#e63946','#457b9d','#f4a261','#2a9d8f','#e9c46a'];
+let ML={};
+let audioCtx=null;
+function playNote(freq,col){
+  try{
+    if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    const o=audioCtx.createOscillator();
+    const g=audioCtx.createGain();
+    o.connect(g);g.connect(audioCtx.destination);
+    o.type='sine';o.frequency.value=freq;
+    g.gain.setValueAtTime(.4,audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.8);
+    o.start();o.stop(audioCtx.currentTime+.8);
+  }catch(e){}
+}
+function iMusic(){
+  ML={pl:{col:1,row:1},done:false,
+    played:Array.from({length:12},()=>new Array(12).fill(false)),
+    flash:{col:-1,row:-1,t:0,color:'#fff'},
+    noteIdx:0,melody:[]};
+  // assign note index to each note pad
+  let ni=0;
+  ML.noteMap={};
+  for(let r=0;r<12;r++)for(let c=0;c<12;c++)if(ML_GRID[r][c]===2){ML.noteMap[r+'_'+c]=ni%ML_NOTES.length;ni++;}
+}
+function uMusic(){
+  const ROWS=12,COLS=12;
+  let nr=ML.pl.row,nc=ML.pl.col;
+  if(JP.ArrowUp)nr--;
+  else if(JP.ArrowDown)nr++;
+  else if(JP.ArrowLeft)nc--;
+  else if(JP.ArrowRight)nc++;
+  else return;
+  if(nr<0||nr>=ROWS||nc<0||nc>=COLS)return;
+  const cell=ML_GRID[nr][nc];
+  if(cell===0)return;
+  ML.pl.row=nr;ML.pl.col=nc;
+  if(cell===2&&!ML.played[nr][nc]){
+    ML.played[nr][nc]=true;
+    const ni=ML.noteMap[nr+'_'+nc]||0;
+    playNote(ML_NOTES[ni],ML_COLS[ni]);
+    ML.flash={col:nc,row:nr,t:30,color:ML_COLS[ni]};
+    ML.melody.push(ML_NOTES[ni]);
+  }
+  if(cell===4)ML.done=true;
+  document.getElementById('info').textContent=ML.done?'🎉 Вышел из лабиринта! | Касание ВЫХОД':'🎵 Наступай на цветные ноты — они звучат! | Касание ВЫХОД';
+}
+function drwMusic(){
+  const ROWS=12,COLS=12;
+  const cw=Math.floor(W/COLS),ch=Math.floor(H/ROWS);
+  // Background
+  c.fillStyle='#1a0a2a';c.fillRect(0,0,W,H);
+  // Grid
+  for(let r=0;r<ROWS;r++)for(let cc2=0;cc2<COLS;cc2++){
+    const cell=ML_GRID[r][cc2];
+    const sx=cc2*cw,sy=r*ch;
+    if(cell===0){// wall
+      c.fillStyle='#2a1a4a';c.fillRect(sx,sy,cw,ch);
+      c.fillStyle='rgba(120,80,200,.15)';c.fillRect(sx+2,sy+2,cw-4,ch-4);
+    }else if(cell===1||cell===3){// floor
+      c.fillStyle='#0d0d1a';c.fillRect(sx,sy,cw,ch);
+      c.fillStyle='rgba(80,50,120,.12)';c.fillRect(sx+1,sy+1,cw-2,ch-2);
+    }else if(cell===2){// note pad
+      c.fillStyle='#0d0d1a';c.fillRect(sx,sy,cw,ch);
+      const ni=ML.noteMap[r+'_'+cc2]||0;
+      const played=ML.played[r][cc2];
+      const isFlash=ML.flash.col===cc2&&ML.flash.row===r&&ML.flash.t>0;
+      const baseCol=ML_COLS[ni];
+      c.fillStyle=isFlash?baseCol:played?'rgba(100,60,160,.3)':baseCol+'88';
+      c.fillRect(sx+3,sy+3,cw-6,ch-6);
+      if(!played){
+        c.fillStyle='rgba(255,255,255,.7)';c.font='bold '+Math.min(cw,ch)*0.55+'px sans-serif';
+        c.textAlign='center';c.fillText('♪',sx+cw/2,sy+ch/2+4);
+      }
+    }else if(cell===4){// exit
+      c.fillStyle='#0d0d1a';c.fillRect(sx,sy,cw,ch);
+      c.fillStyle='rgba(255,215,0,.8)';c.fillRect(sx+2,sy+2,cw-4,ch-4);
+      c.fillStyle='#000';c.font='bold '+Math.min(cw,ch)*.5+'px sans-serif';
+      c.textAlign='center';c.fillText('🚪',sx+cw/2,sy+ch/2+4);
+    }
+  }
+  // Flash effect
+  if(ML.flash.t>0){
+    const sx=ML.flash.col*cw,sy=ML.flash.row*ch;
+    c.globalAlpha=ML.flash.t/30;
+    c.fillStyle=ML.flash.color;c.fillRect(sx,sy,cw,ch);
+    c.globalAlpha=1;ML.flash.t--;
+  }
+  // Wall shading
+  for(let r=0;r<ROWS;r++)for(let cc2=0;cc2<COLS;cc2++){
+    if(ML_GRID[r][cc2]===0){
+      const sx=cc2*cw,sy=r*ch;
+      c.strokeStyle='rgba(150,100,255,.2)';c.lineWidth=1;c.strokeRect(sx,sy,cw,ch);
+    }
+  }
+  // Player
+  const px=ML.pl.col*cw+cw/2,py=ML.pl.row*ch+ch/2;
+  c.beginPath();c.arc(px,py,Math.min(cw,ch)*.32,0,Math.PI*2);
+  c.fillStyle='#e03030';c.fill();
+  c.beginPath();c.arc(px,py,Math.min(cw,ch)*.32,0,Math.PI*2);
+  c.strokeStyle='#fff';c.lineWidth=2;c.stroke();
+  c.fillStyle='#fff';c.font='bold '+Math.min(cw,ch)*.45+'px sans-serif';
+  c.textAlign='center';c.fillText('😊',px,py+Math.min(cw,ch)*.18);
+  // Melody display
+  const played=ML.melody.length;
+  const total=Object.keys(ML.noteMap).length;
+  c.fillStyle='rgba(0,0,0,.55)';c.fillRect(W-100,5,95,22);
+  c.fillStyle='#ffd700';c.font='11px sans-serif';c.textAlign='right';
+  c.fillText('🎵 '+played+'/'+total,W-8,20);
+  if(ML.done){c.fillStyle='rgba(0,0,0,.6)';c.fillRect(0,H/2-32,W,64);c.fillStyle='#ffd700';c.font='bold 20px sans-serif';c.textAlign='center';c.fillText('🎉 Ты прошёл лабиринт!',W/2,H/2+8);}
+  drwExit();c.textAlign='left';
+}
+
+// ═══════════════════════════════════════════════
 // MAIN LOOP
 // ═══════════════════════════════════════════════
 function loop(){
@@ -581,6 +714,7 @@ function loop(){
   else if(state==='basket'){uBasket();drwBasket();}
   else if(state==='rope'){uRope();drwRope();}
   else if(state==='climb'){uClimb();drwClimb();}
+  else if(state==='music'){uMusic();drwMusic();}
   for(const k in JP)delete JP[k];
   requestAnimationFrame(loop);
 }
