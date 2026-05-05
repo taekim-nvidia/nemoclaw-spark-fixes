@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>A* Pathfinding Visualizer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #1a1a2e;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: system-ui, sans-serif;
+  color: #eee;
+  padding: 10px;
+}
+h1 { font-size: 1.4rem; margin-bottom: 10px; }
+canvas {
+  border: 2px solid #444;
+  border-radius: 4px;
+  cursor: crosshair;
+  touch-action: none;
+  max-width: 100%;
+}
+.controls {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  background: #16213e;
+  color: #eee;
+  border: 1px solid #555;
+  transition: background 0.2s;
+}
+button:hover { background: #0f3460; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+.legend {
+  margin-top: 10px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+}
+.legend span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.legend .box {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  display: inline-block;
+}
+</style>
+</head>
+<body>
+<h1>A* Pathfinding Visualizer</h1>
+<canvas id="canvas"></canvas>
+<div class="controls">
+  <button id="btnStart">Старт</button>
+  <button id="btnReset">Сброс</button>
+  <button id="btnClear">Очистить стены</button>
+</div>
+<div class="legend">
+  <span><span class="box" style="background:#4caf50"></span> Старт</span>
+  <span><span class="box" style="background:#f44336"></span> Финиш</span>
+  <span><span class="box" style="background:#333"></span> Стена</span>
+  <span><span class="box" style="background:#42a5f5"></span> Открытый</span>
+  <span><span class="box" style="background:#1565c0"></span> Закрытый</span>
+  <span><span class="box" style="background:#ffeb3b"></span> Путь</span>
+</div>
+
+<script>
+const COLS = 30;
+const ROWS = 20;
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let cellSize;
+let grid = [];
+let startNode = { x: 2, y: 10 };
+let endNode = { x: 27, y: 10 };
+let running = false;
+let animationId = null;
+let dragging = null;
+
+function resize() {
+  const maxW = Math.min(window.innerWidth - 20, 900);
+  cellSize = Math.floor(maxW / COLS);
+  canvas.width = cellSize * COLS;
+  canvas.height = cellSize * ROWS;
+  draw();
+}
+
+function initGrid() {
+  grid = [];
+  for (let y = 0; y < ROWS; y++) {
+    grid[y] = [];
+    for (let x = 0; x < COLS; x++) {
+      grid[y][x] = { x, y, wall: false, g: 0, h: 0, f: 0, parent: null, open: false, closed: false, path: false };
+    }
+  }
+}
+
+function resetSearch() {
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const c = grid[y][x];
+      c.g = 0; c.h = 0; c.f = 0; c.parent = null;
+      c.open = false; c.closed = false; c.path = false;
+    }
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const c = grid[y][x];
+      let color = '#0f0f23';
+      if (c.wall) color = '#333';
+      else if (c.path) color = '#ffeb3b';
+      else if (c.closed) color = '#1565c0';
+      else if (c.open) color = '#42a5f5';
+
+      if (x === startNode.x && y === startNode.y) color = '#4caf50';
+      if (x === endNode.x && y === endNode.y) color = '#f44336';
+
+      ctx.fillStyle = color;
+      ctx.fillRect(x * cellSize, y * cellSize, cellSize - 1, cellSize - 1);
+    }
+  }
+}
+
+function heuristic(a, b) {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+}
+
+function getNeighbors(node) {
+  const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
+  const result = [];
+  for (const [dx, dy] of dirs) {
+    const nx = node.x + dx;
+    const ny = node.y + dy;
+    if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && !grid[ny][nx].wall) {
+      result.push(grid[ny][nx]);
+    }
+  }
+  return result;
+}
+
+function runAStar() {
+  if (running) return;
+  running = true;
+  resetSearch();
+  draw();
+
+  const openSet = [];
+  const start = grid[startNode.y][startNode.x];
+  const end = grid[endNode.y][endNode.x];
+  start.g = 0;
+  start.h = heuristic(start, end);
+  start.f = start.h;
+  start.open = true;
+  openSet.push(start);
+
+  function step() {
+    if (openSet.length === 0) {
+      running = false;
+      draw();
+      return;
+    }
+
+    openSet.sort((a, b) => a.f - b.f);
+    const current = openSet.shift();
+    current.open = false;
+    current.closed = true;
+
+    if (current.x === end.x && current.y === end.y) {
+      let node = current;
+      while (node) {
+        node.path = true;
+        node = node.parent;
+      }
+      running = false;
+      draw();
+      return;
+    }
+
+    for (const neighbor of getNeighbors(current)) {
+      if (neighbor.closed) continue;
+      const tentG = current.g + 1;
+      if (!neighbor.open || tentG < neighbor.g) {
+        neighbor.g = tentG;
+        neighbor.h = heuristic(neighbor, end);
+        neighbor.f = neighbor.g + neighbor.h;
+        neighbor.parent = current;
+        if (!neighbor.open) {
+          neighbor.open = true;
+          openSet.push(neighbor);
+        }
+      }
+    }
+
+    draw();
+    animationId = requestAnimationFrame(step);
+  }
+
+  animationId = requestAnimationFrame(step);
+}
+
+function getCell(e) {
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  const x = Math.floor((clientX - rect.left) / cellSize);
+  const y = Math.floor((clientY - rect.top) / cellSize);
+  if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return null;
+  return { x, y };
+}
+
+function pointerDown(e) {
+  if (running) return;
+  e.preventDefault();
+  const cell = getCell(e);
+  if (!cell) return;
+
+  if (cell.x === startNode.x && cell.y === startNode.y) {
+    dragging = 'start';
+  } else if (cell.x === endNode.x && cell.y === endNode.y) {
+    dragging = 'end';
+  } else {
+    dragging = grid[cell.y][cell.x].wall ? 'erase' : 'wall';
+    grid[cell.y][cell.x].wall = dragging === 'wall';
+    draw();
+  }
+}
+
+function pointerMove(e) {
+  if (!dragging || running) return;
+  e.preventDefault();
+  const cell = getCell(e);
+  if (!cell) return;
+
+  if (dragging === 'start') {
+    if (!(cell.x === endNode.x && cell.y === endNode.y) && !grid[cell.y][cell.x].wall) {
+      startNode = { x: cell.x, y: cell.y };
+      draw();
+    }
+  } else if (dragging === 'end') {
+    if (!(cell.x === startNode.x && cell.y === startNode.y) && !grid[cell.y][cell.x].wall) {
+      endNode = { x: cell.x, y: cell.y };
+      draw();
+    }
+  } else {
+    if (cell.x === startNode.x && cell.y === startNode.y) return;
+    if (cell.x === endNode.x && cell.y === endNode.y) return;
+    grid[cell.y][cell.x].wall = dragging === 'wall';
+    draw();
+  }
+}
+
+function pointerUp() {
+  dragging = null;
+}
+
+canvas.addEventListener('mousedown', pointerDown);
+canvas.addEventListener('mousemove', pointerMove);
+canvas.addEventListener('mouseup', pointerUp);
+canvas.addEventListener('mouseleave', pointerUp);
+canvas.addEventListener('touchstart', pointerDown, { passive: false });
+canvas.addEventListener('touchmove', pointerMove, { passive: false });
+canvas.addEventListener('touchend', pointerUp);
+
+document.getElementById('btnStart').addEventListener('click', runAStar);
+document.getElementById('btnReset').addEventListener('click', () => {
+  if (animationId) cancelAnimationFrame(animationId);
+  running = false;
+  resetSearch();
+  draw();
+});
+document.getElementById('btnClear').addEventListener('click', () => {
+  if (animationId) cancelAnimationFrame(animationId);
+  running = false;
+  initGrid();
+  draw();
+});
+
+window.addEventListener('resize', resize);
+initGrid();
+resize();
+</script>
+</body>
+</html>
