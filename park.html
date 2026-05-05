@@ -15,36 +15,41 @@ body {
   min-height: 100vh;
   font-family: 'Georgia', serif;
   overflow: hidden;
+  touch-action: none;
 }
 #title {
   color: #f0e68c;
-  font-size: 14px;
-  letter-spacing: 2px;
-  margin-bottom: 6px;
+  font-size: 13px;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
   text-shadow: 0 0 10px #f0e68c88;
+  text-align: center;
 }
 #canvas {
   border: 2px solid #4a7c4a;
   border-radius: 4px;
   display: block;
-  box-shadow: 0 0 30px #2d5a2d88;
+  box-shadow: 0 0 20px #2d5a2d88;
 }
 #info {
-  color: #a8d5a2;
-  font-size: 11px;
-  margin-top: 6px;
+  color: #f0e68c;
+  font-size: 12px;
+  margin-top: 5px;
   text-align: center;
   min-height: 16px;
+  background: rgba(0,0,0,0.5);
+  padding: 2px 10px;
+  border-radius: 8px;
 }
 #dpad {
   display: grid;
-  grid-template-columns: repeat(3, 52px);
-  grid-template-rows: repeat(2, 52px);
+  grid-template-columns: repeat(3, 54px);
+  grid-template-rows: repeat(2, 54px);
   gap: 5px;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 .dbtn {
-  background: rgba(74,124,74,0.7);
+  background: rgba(60,100,60,0.8);
   border: 2px solid #4a7c4a;
   border-radius: 10px;
   color: #fff;
@@ -57,7 +62,7 @@ body {
   -webkit-tap-highlight-color: transparent;
   touch-action: none;
 }
-.dbtn:active { background: rgba(74,124,74,1); }
+.dbtn:active { background: rgba(80,140,80,1); }
 #dbtn-up    { grid-column: 2; grid-row: 1; }
 #dbtn-left  { grid-column: 1; grid-row: 2; }
 #dbtn-down  { grid-column: 2; grid-row: 2; }
@@ -67,7 +72,7 @@ body {
 <body>
 <div id="title">🌿 ПАРК ГАЛИЦКОГО · КРАСНОДАР 🌿</div>
 <canvas id="canvas"></canvas>
-<div id="info">Добро пожаловать в парк!</div>
+<div id="info">Добро пожаловать в парк Краснодар!</div>
 <div id="dpad">
   <button class="dbtn" id="dbtn-up">▲</button>
   <button class="dbtn" id="dbtn-left">◀</button>
@@ -76,438 +81,365 @@ body {
 </div>
 
 <script>
-const W = Math.min(window.innerWidth - 8, 420);
-const H = Math.min(window.innerHeight - 180, 420);
+const W = Math.min(window.innerWidth - 8, 400);
+const H = Math.min(window.innerHeight - 190, 400);
 const canvas = document.getElementById('canvas');
 canvas.width = W; canvas.height = H;
 const ctx = canvas.getContext('2d');
 
-// Map size
-const MAP_W = 1200, MAP_H = 1200;
-
-// Camera
+const MAP_W = 1400, MAP_H = 1400;
 let camX = 0, camY = 0;
-
-// Player
-const player = { x: 600, y: 900, size: 12, speed: 3, dir: 0 };
-
-// Keys
+const player = { x: 700, y: 1100, size: 14, speed: 3.5 };
 const keys = {};
 
-// Map objects
-const paths = [
-  // Main central path (horizontal)
-  { x: 100, y: 570, w: 1000, h: 30, color: '#c8b89a' },
-  // Main central path (vertical)
-  { x: 570, y: 100, w: 30, h: 1000, color: '#c8b89a' },
-  // Diagonal paths
-  { x: 200, y: 200, w: 800, h: 20, color: '#c8b89a', angle: 45 },
-  // Ring path around central area
-  { x: 380, y: 380, w: 440, h: 440, color: '#c8b89a', type: 'ring' },
-  // Entrance path bottom
-  { x: 570, y: 1000, w: 30, h: 200, color: '#c8b89a' },
-  // Entrance path top
-  { x: 570, y: 0, w: 30, h: 200, color: '#c8b89a' },
-  // Side paths
-  { x: 0, y: 570, w: 200, h: 30, color: '#c8b89a' },
-  { x: 1000, y: 570, w: 200, h: 30, color: '#c8b89a' },
-  // Inner paths
-  { x: 380, y: 380, w: 440, h: 30, color: '#c8b89a' },
-  { x: 380, y: 790, w: 440, h: 30, color: '#c8b89a' },
-  { x: 380, y: 380, w: 30, h: 440, color: '#c8b89a' },
-  { x: 790, y: 380, w: 30, h: 440, color: '#c8b89a' },
+// World to screen
+function ws(wx, wy) { return [wx - camX, wy - camY]; }
+
+// --- PATHS ---
+const pathRects = [
+  // Main vertical spine
+  {x:668, y:50,  w:64, h:1300},
+  // Main horizontal spine
+  {x:50,  y:668, w:1300, h:64},
+  // Japanese garden paths
+  {x:50,  y:200, w:500, h:30},
+  {x:50,  y:400, w:500, h:30},
+  {x:200, y:200, w:30,  h:230},
+  // Inner ring (NW quad)
+  {x:300, y:300, w:350, h:25},
+  {x:300, y:300, w:25,  h:350},
+  {x:300, y:625, w:350, h:25},
+  {x:625, y:300, w:25,  h:350},
+  // Inner ring (NE quad)
+  {x:775, y:300, w:350, h:25},
+  {x:775, y:300, w:25,  h:350},
+  {x:775, y:625, w:350, h:25},
+  {x:1100,y:300, w:25,  h:350},
+  // South paths
+  {x:300, y:775, w:350, h:25},
+  {x:300, y:775, w:25,  h:350},
+  {x:300, y:1100,w:350, h:25},
+  {x:625, y:775, w:25,  h:350},
+  {x:775, y:775, w:350, h:25},
+  {x:775, y:775, w:25,  h:350},
+  {x:775, y:1100,w:350, h:25},
+  {x:1100,y:775, w:25,  h:350},
+  // Diagonal alley (NW)
+  {x:100, y:100, w:25,  h:500},
+  // Entrance paths
+  {x:668, y:1300,w:64,  h:100},
 ];
 
-const grass = [
-  { x: 0, y: 0, w: MAP_W, h: MAP_H, color: '#3a8c3a' },
+// --- WATER ---
+const ponds = [
+  {x:850, y:430, rx:110, ry:70, color:'#1a6ea8', name:'🐟 Пруд с карпами'},
+  {x:200, y:500, rx:80,  ry:55, color:'#1a6ea8', name:'💧 Малый пруд'},
+  {x:1100,y:500, rx:70,  ry:50, color:'#1a6ea8', name:'💧 Прудик'},
 ];
 
-const water = [
-  // Main pond center
-  { x: 430, y: 430, w: 340, h: 200, color: '#2a6ea8', type: 'pond', name: 'Главный пруд' },
-  // Small pond NW
-  { x: 150, y: 150, w: 160, h: 120, color: '#2a6ea8', type: 'pond', name: 'Малый пруд' },
-  // Small pond NE
-  { x: 900, y: 150, w: 160, h: 120, color: '#2a6ea8', type: 'pond', name: 'Восточный пруд' },
+// --- LANDMARKS ---
+const zones = [
+  // Japanese garden (NW, large green area)
+  {x:50,  y:50,  w:550, h:580, color:'#2d8a4a', type:'jpgarden', name:'🇯🇵 Японский сад (самый большой в мире вне Японии!)'},
+  // Flat fountain (splash pad) — central north
+  {x:580, y:120, w:150, h:60,  color:'#4ab8e8', type:'flatfountain', name:'⛲ Плоскостной фонтан'},
+  // Amphitheatre — central
+  {x:450, y:680, w:300, h:160, color:'#8B6914', type:'amph', name:'🎭 Амфитеатр'},
+  // Skate park — SE
+  {x:800, y:780, w:180, h:130, color:'#888', type:'skate', name:'🛹 Скейт-парк'},
+  // Climbing wall
+  {x:1050,y:780, w:90,  h:80,  color:'#a05020', type:'climb', name:'🧗 Скалодром'},
+  // Rope park
+  {x:1050,y:880, w:90,  h:70,  color:'#804010', type:'rope', name:'🪢 Верёвочный парк'},
+  // Basketball
+  {x:800, y:940, w:180, h:100, color:'#c86420', type:'bball', name:'🏀 Уличный баскетбол'},
+  // Water labyrinth — NE
+  {x:880, y:200, w:200, h:180, color:'#2a90c0', type:'wlab', name:'🌊 Водный лабиринт'},
+  // Music labyrinth — central east
+  {x:1100,y:680, w:180, h:120, color:'#7040b0', type:'mlab', name:'🎵 Музыкальный лабиринт'},
+  // Flower garden / terrace
+  {x:300, y:780, w:130, h:130, color:'#e060a0', type:'flower', name:'🌸 Цветочный сад с террасой'},
+  // Cloud park alley
+  {x:580, y:1150,w:240, h:60,  color:'#b0d0f0', type:'cloud', name:'☁️ Аллея парка Облаков'},
+  // Cafes
+  {x:100, y:680, w:70,  h:55,  color:'#6b3a1f', type:'cafe', name:'☕ Кафе Краснодар'},
+  {x:1230,y:680, w:70,  h:55,  color:'#6b3a1f', type:'cafe', name:'🍔 Burger Bar'},
+  {x:680, y:50,  w:70,  h:55,  color:'#6b3a1f', type:'cafe', name:'☕ Кафе 1/62'},
+  {x:100, y:1230,w:70,  h:55,  color:'#5a2a0a', type:'cafe', name:'🍱 Ресторан Ryotei (японский)'},
+  // Bull sculpture
+  {x:660, y:640, w:80,  h:80,  color:'#b8860b', type:'bull', name:'🐂 Скульптура «Бык»'},
+  // Geolocation art object
+  {x:660, y:300, w:80,  h:80,  color:'#d4af37', type:'geo', name:'📍 Арт-объект «Геолокация»'},
+  // Ozon Arena stadium (outside park, NE corner)
+  {x:1200,y:50,  w:180, h:180, color:'#2244aa', type:'stadium', name:'⚽ Стадион Ozon Арена'},
+  // Entrances
+  {x:650, y:1340,w:100, h:40,  color:'#555', type:'gate', name:'🚪 Главный вход (юг)'},
+  {x:650, y:20,  w:100, h:30,  color:'#555', type:'gate', name:'🚪 Северный вход'},
+  {x:20,  y:650, w:30,  h:100, color:'#555', type:'gate', name:'🚪 Западный вход'},
 ];
 
-const landmarks = [
-  // Fountains
-  { x: 585, y: 585, r: 40, color: '#5bb8f5', type: 'fountain', name: '⛲ Главный фонтан' },
-  { x: 230, y: 580, r: 20, color: '#5bb8f5', type: 'fountain', name: '⛲ Фонтан' },
-  { x: 980, y: 580, r: 20, color: '#5bb8f5', type: 'fountain', name: '⛲ Фонтан' },
-
-  // Sculptures / art objects
-  { x: 420, y: 250, r: 15, color: '#d4af37', type: 'sculpture', name: '🗿 Скульптура' },
-  { x: 790, y: 250, r: 15, color: '#d4af37', type: 'sculpture', name: '🗿 Скульптура' },
-  { x: 250, y: 790, r: 15, color: '#d4af37', type: 'sculpture', name: '🗿 Скульптура' },
-  { x: 960, y: 790, r: 15, color: '#d4af37', type: 'sculpture', name: '🗿 Скульптура' },
-
-  // Cafes / pavilions
-  { x: 200, y: 400, w: 60, h: 50, color: '#8B4513', type: 'cafe', name: '☕ Кафе' },
-  { x: 950, y: 400, w: 60, h: 50, color: '#8B4513', type: 'cafe', name: '☕ Кафе' },
-  { x: 200, y: 750, w: 60, h: 50, color: '#8B4513', type: 'cafe', name: '☕ Кафе' },
-  { x: 950, y: 750, w: 60, h: 50, color: '#8B4513', type: 'cafe', name: '☕ Кафе' },
-
-  // Amphitheatre
-  { x: 480, y: 820, w: 240, h: 100, color: '#b8860b', type: 'stage', name: '🎭 Амфитеатр' },
-
-  // Children playground
-  { x: 100, y: 700, w: 120, h: 100, color: '#ff6b6b', type: 'playground', name: '🎠 Детская площадка' },
-
-  // Sport area
-  { x: 950, y: 650, w: 120, h: 100, color: '#ff8c00', type: 'sport', name: '⚽ Спортивная зона' },
-
-  // Entrance gates
-  { x: 565, y: 1130, w: 70, h: 30, color: '#888', type: 'gate', name: '🚪 Главный вход' },
-  { x: 565, y: 40, w: 70, h: 30, color: '#888', type: 'gate', name: '🚪 Северный вход' },
-  { x: 40, y: 555, w: 30, h: 70, color: '#888', type: 'gate', name: '🚪 Западный вход' },
-  { x: 1130, y: 555, w: 30, h: 70, color: '#888', type: 'gate', name: '🚪 Восточный вход' },
-
-  // Rose garden
-  { x: 820, y: 820, w: 130, h: 130, color: '#ff69b4', type: 'garden', name: '🌹 Розарий' },
+// Solid collision objects
+const solids = [
+  ...ponds.map(p => ({type:'pond', x:p.x, y:p.y, rx:p.rx, ry:p.ry})),
+  {x:880, y:200, w:200, h:180}, // water lab
+  {x:1200,y:50,  w:180, h:180}, // stadium
 ];
 
-// Trees (scattered)
+// Trees
 const trees = [];
-const treePositions = [
-  [130,130],[200,130],[260,130],[130,200],[130,260],
-  [1070,130],[1000,130],[940,130],[1070,200],[1070,260],
-  [130,1070],[200,1070],[260,1070],[130,1000],[130,940],
-  [1070,1070],[1000,1070],[940,1070],[1070,1000],[1070,940],
-  [340,200],[400,160],[460,200],[340,1000],[400,1040],[460,1000],
-  [740,200],[800,160],[860,200],[740,1000],[800,1040],[860,1000],
-  [160,340],[160,400],[160,460],[160,740],[160,800],[160,860],
-  [1040,340],[1040,400],[1040,460],[1040,740],[1040,800],[1040,860],
-  [310,310],[310,880],[880,310],[880,880],
-  [350,500],[350,600],[350,700],
-  [850,500],[850,600],[850,700],
-  [500,350],[600,350],[700,350],
-  [500,850],[600,850],[700,850],
-  [450,670],[480,710],[520,680],[550,720],
-  [700,670],[720,710],[740,680],[760,720],
+// Japanese garden trees (dense)
+for (let i = 0; i < 80; i++) {
+  const tx = 60 + Math.random() * 520;
+  const ty = 60 + Math.random() * 550;
+  trees.push({x:tx, y:ty, r:10 + Math.random()*6, color: Math.random()>0.5?'#1a7a1a':'#2d5a00'});
+}
+// Park perimeter trees
+const perimCoords = [
+  [130,670],[200,670],[270,670],[130,750],[130,800],
+  [1270,670],[1200,670],[1130,670],[1270,750],[1270,800],
+  [670,130],[700,130],[730,130],[670,200],[670,250],
+  [670,1200],[700,1200],[730,1200],[670,1250],[670,1270],
+  [340,340],[340,620],[620,340],[620,620],
+  [780,340],[780,620],[1060,340],[1060,620],
+  [340,780],[340,1060],[620,780],[620,1060],
+  [780,780],[780,1060],[1060,780],[1060,1060],
+  [400,400],[500,400],[600,400],[400,500],[400,600],
+  [800,400],[900,400],[1000,400],[1100,400],
+  [800,500],[800,600],[1100,500],[1100,600],
+  [400,800],[400,900],[400,1000],[400,1100],
+  [600,800],[600,900],[600,1000],[600,1100],
+  [800,800],[1000,800],[800,1100],[1000,1100],
 ];
-treePositions.forEach(([x,y]) => trees.push({x, y, r: 14}));
-
-// Solid objects for collision
-const solidObjects = [
-  ...water,
-  // buildings
-  { x: 200, y: 400, w: 60, h: 50 },
-  { x: 950, y: 400, w: 60, h: 50 },
-  { x: 200, y: 750, w: 60, h: 50 },
-  { x: 950, y: 750, w: 60, h: 50 },
-  { x: 480, y: 820, w: 240, h: 100 },
-];
-
-function worldToScreen(wx, wy) {
-  return [wx - camX, wy - camY];
-}
-
-function updateCamera() {
-  camX = player.x - W / 2;
-  camY = player.y - H / 2;
-  camX = Math.max(0, Math.min(MAP_W - W, camX));
-  camY = Math.max(0, Math.min(MAP_H - H, camY));
-}
-
-function drawEllipse(x, y, rx, ry, color) {
-  ctx.beginPath();
-  ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill();
-}
+perimCoords.forEach(([x,y]) => trees.push({x, y, r:13, color:'#2a6a2a'}));
 
 function isColliding(nx, ny) {
-  const pr = player.size / 2;
-  for (const o of solidObjects) {
+  const pr = player.size / 2 + 2;
+  if (nx-pr<0||nx+pr>MAP_W||ny-pr<0||ny+pr>MAP_H) return true;
+  for (const o of solids) {
     if (o.type === 'pond') {
-      // ellipse-ish check
-      const cx = o.x + o.w/2, cy = o.y + o.h/2;
-      const dx = (nx - cx) / (o.w/2 + pr);
-      const dy = (ny - cy) / (o.h/2 + pr);
-      if (dx*dx + dy*dy < 1) return true;
-    } else if (o.w && o.h) {
-      if (nx - pr < o.x + o.w && nx + pr > o.x &&
-          ny - pr < o.y + o.h && ny + pr > o.y) return true;
+      const dx=(nx-o.x)/((o.rx||50)+pr), dy=(ny-o.y)/((o.ry||50)+pr);
+      if (dx*dx+dy*dy<1) return true;
+    } else if (o.w) {
+      if (nx-pr<o.x+o.w&&nx+pr>o.x&&ny-pr<o.y+o.h&&ny+pr>o.y) return true;
     }
   }
-  // Map boundaries
-  if (nx - pr < 0 || nx + pr > MAP_W || ny - pr < 0 || ny + pr > MAP_H) return true;
   return false;
 }
 
-function getNearbyName() {
-  const pr = 60;
-  for (const lm of landmarks) {
-    if (lm.r) {
-      const dx = player.x - lm.x, dy = player.y - lm.y;
-      if (Math.sqrt(dx*dx+dy*dy) < lm.r + pr) return lm.name;
-    } else if (lm.w) {
-      const cx = lm.x + lm.w/2, cy = lm.y + lm.h/2;
-      const dx = player.x - cx, dy = player.y - cy;
-      if (Math.abs(dx) < lm.w/2 + pr && Math.abs(dy) < lm.h/2 + pr) return lm.name;
+function getNearby() {
+  const r = 70;
+  for (const z of zones) {
+    if (z.r) {
+      const dx=player.x-z.x, dy=player.y-z.y;
+      if (Math.hypot(dx,dy)<z.r+r) return z.name;
+    } else if (z.w) {
+      const cx=z.x+z.w/2, cy=z.y+z.h/2;
+      if (Math.abs(player.x-cx)<z.w/2+r&&Math.abs(player.y-cy)<z.h/2+r) return z.name;
     }
   }
-  for (const w of water) {
-    const cx = w.x + w.w/2, cy = w.y + w.h/2;
-    const dx = player.x - cx, dy = player.y - cy;
-    if (Math.abs(dx) < w.w/2 + pr && Math.abs(dy) < w.h/2 + pr) return w.name;
+  for (const p of ponds) {
+    const dx=player.x-p.x, dy=player.y-p.y;
+    if (Math.hypot(dx/p.rx,dy/p.ry)<1.5) return p.name;
   }
   return '';
 }
 
+function updateCamera() {
+  camX = Math.max(0, Math.min(MAP_W-W, player.x - W/2));
+  camY = Math.max(0, Math.min(MAP_H-H, player.y - H/2));
+}
+
+let frame = 0;
 function draw() {
-  ctx.clearRect(0, 0, W, H);
+  frame++;
+  ctx.clearRect(0,0,W,H);
 
-  // Grass bg
+  // Base grass
   ctx.fillStyle = '#3d9140';
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(0,0,W,H);
 
-  // Lighter grass patches
-  ctx.fillStyle = '#45a348';
-  for (let gx = 0; gx < MAP_W; gx += 80) {
-    for (let gy = 0; gy < MAP_H; gy += 80) {
-      const [sx, sy] = worldToScreen(gx, gy);
-      if (sx > -80 && sx < W+80 && sy > -80 && sy < H+80) {
-        ctx.fillRect(sx + 10, sy + 10, 30, 30);
-      }
-    }
+  // Grass variation
+  ctx.fillStyle = '#44a047';
+  for (let gx=0; gx<MAP_W; gx+=60) for (let gy=0; gy<MAP_H; gy+=60) {
+    const [sx,sy]=ws(gx,gy);
+    if (sx>-60&&sx<W+60&&sy>-60&&sy<H+60)
+      ctx.fillRect(sx+8,sy+8,24,24);
   }
 
   // Paths
-  ctx.fillStyle = '#c8b89a';
-  // Main cross
-  let [px, py] = worldToScreen(100, 558);
-  ctx.fillRect(px, py, 1000, 28);
-  [px, py] = worldToScreen(558, 100);
-  ctx.fillRect(px, py, 28, 1000);
-  // Inner ring
-  [px, py] = worldToScreen(380, 380);
-  ctx.fillRect(px, py, 440, 22);
-  [px, py] = worldToScreen(380, 798);
-  ctx.fillRect(px, py, 440, 22);
-  [px, py] = worldToScreen(380, 380);
-  ctx.fillRect(px, py, 22, 440);
-  [px, py] = worldToScreen(798, 380);
-  ctx.fillRect(px, py, 22, 440);
-
-  // Water ponds
-  for (const w of water) {
-    const [sx, sy] = worldToScreen(w.x + w.w/2, w.y + w.h/2);
-    ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(sx, sy, w.w/2, w.h/2, 0, 0, Math.PI * 2);
-    ctx.fillStyle = '#1a5fa0';
-    ctx.fill();
-    ctx.strokeStyle = '#4a9fd4';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    // Water shimmer
-    ctx.fillStyle = 'rgba(255,255,255,0.1)';
-    ctx.beginPath();
-    ctx.ellipse(sx - w.w/6, sy - w.h/6, w.w/5, w.h/8, -0.3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+  ctx.fillStyle = '#d4c4a0';
+  for (const p of pathRects) {
+    const [sx,sy]=ws(p.x,p.y);
+    if (sx<W&&sx+p.w>0&&sy<H&&sy+p.h>0)
+      ctx.fillRect(sx,sy,p.w,p.h);
+  }
+  // Path edges (darker border)
+  ctx.strokeStyle = '#b8a880';
+  ctx.lineWidth = 1;
+  for (const p of pathRects) {
+    const [sx,sy]=ws(p.x,p.y);
+    if (sx<W&&sx+p.w>0&&sy<H&&sy+p.h>0)
+      ctx.strokeRect(sx,sy,p.w,p.h);
   }
 
-  // Landmarks
-  for (const lm of landmarks) {
-    if (lm.type === 'fountain') {
-      const [sx, sy] = worldToScreen(lm.x, lm.y);
-      // Base
-      ctx.beginPath();
-      ctx.arc(sx, sy, lm.r, 0, Math.PI*2);
-      ctx.fillStyle = '#1a7abf';
-      ctx.fill();
-      ctx.strokeStyle = '#5bb8f5';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      // Water spray
-      ctx.fillStyle = 'rgba(91,184,245,0.7)';
-      ctx.beginPath();
-      ctx.arc(sx, sy, lm.r * 0.5, 0, Math.PI*2);
-      ctx.fill();
-      // Sparkle
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(sx - 3, sy - 3, 3, 0, Math.PI*2);
-      ctx.fill();
-    } else if (lm.type === 'sculpture') {
-      const [sx, sy] = worldToScreen(lm.x, lm.y);
-      ctx.beginPath();
-      ctx.arc(sx, sy, lm.r, 0, Math.PI*2);
-      ctx.fillStyle = '#b8a060';
-      ctx.fill();
-      ctx.strokeStyle = '#d4af37';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      // Top
-      ctx.fillStyle = '#d4af37';
-      ctx.beginPath();
-      ctx.arc(sx, sy - lm.r/2, lm.r * 0.4, 0, Math.PI*2);
-      ctx.fill();
-    } else if (lm.type === 'cafe' || lm.type === 'stage' || lm.type === 'gate' || lm.type === 'playground' || lm.type === 'sport' || lm.type === 'garden') {
-      const [sx, sy] = worldToScreen(lm.x, lm.y);
-      ctx.fillStyle = lm.color;
-      ctx.fillRect(sx, sy, lm.w, lm.h);
-      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(sx, sy, lm.w, lm.h);
+  // Zones background
+  for (const z of zones) {
+    const [sx,sy]=ws(z.x,z.y);
+    if (!z.w||sx>W||sx+z.w<0||sy>H||sy+z.h<0) continue;
+    ctx.fillStyle = z.color;
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(sx,sy,z.w,z.h);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx,sy,z.w,z.h);
 
-      if (lm.type === 'garden') {
-        // Roses dots
-        const colors = ['#ff69b4','#ff1493','#dc143c','#ff6347'];
-        for (let i = 0; i < 12; i++) {
-          ctx.fillStyle = colors[i % colors.length];
-          ctx.beginPath();
-          ctx.arc(sx + 10 + (i % 4) * 28, sy + 10 + Math.floor(i/4) * 35, 8, 0, Math.PI*2);
-          ctx.fill();
-        }
-      }
-    }
+    // Zone details
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'center';
+    const emoji = z.name.split(' ')[0];
+    if (z.w>40 && z.h>40)
+      ctx.fillText(emoji, sx+z.w/2, sy+z.h/2+5);
+  }
+
+  // Ponds
+  for (const p of ponds) {
+    const [sx,sy]=ws(p.x,p.y);
+    if (sx+p.rx<0||sx-p.rx>W||sy+p.ry<0||sy-p.ry>H) continue;
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(sx,sy,p.rx,p.ry,0,0,Math.PI*2);
+    ctx.fillStyle='#1560a0';
+    ctx.fill();
+    // Shimmer
+    const phase = frame*0.05;
+    ctx.fillStyle='rgba(80,160,220,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(sx+Math.sin(phase)*5-p.rx*0.2, sy-p.ry*0.25, p.rx*0.4, p.ry*0.2, 0.3, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle='#4ab0e8';
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.ellipse(sx,sy,p.rx,p.ry,0,0,Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   // Trees
   for (const t of trees) {
-    const [sx, sy] = worldToScreen(t.x, t.y);
-    if (sx < -20 || sx > W+20 || sy < -20 || sy > H+20) continue;
+    const [sx,sy]=ws(t.x,t.y);
+    if (sx<-20||sx>W+20||sy<-20||sy>H+20) continue;
     // Shadow
     ctx.beginPath();
-    ctx.ellipse(sx + 3, sy + 4, t.r * 0.8, t.r * 0.5, 0, 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.ellipse(sx+3,sy+5,t.r*0.8,t.r*0.4,0,0,Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,0.18)';
     ctx.fill();
-    // Trunk
-    ctx.fillStyle = '#5c3d1e';
-    ctx.fillRect(sx - 3, sy, 6, 8);
     // Crown
     ctx.beginPath();
-    ctx.arc(sx, sy, t.r, 0, Math.PI*2);
-    ctx.fillStyle = '#2d7a2d';
+    ctx.arc(sx,sy,t.r,0,Math.PI*2);
+    ctx.fillStyle=t.color||'#2a6a2a';
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(sx - 3, sy - 3, t.r * 0.7, 0, Math.PI*2);
-    ctx.fillStyle = '#3a9a3a';
-    ctx.fill();
-    // Highlight
-    ctx.beginPath();
-    ctx.arc(sx - 4, sy - 4, t.r * 0.3, 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(100,200,100,0.4)';
+    ctx.arc(sx-t.r*0.25,sy-t.r*0.25,t.r*0.6,0,Math.PI*2);
+    ctx.fillStyle='rgba(80,180,80,0.4)';
     ctx.fill();
   }
 
   // Player shadow
-  const [spx, spy] = worldToScreen(player.x, player.y);
+  const [spx,spy]=ws(player.x,player.y);
   ctx.beginPath();
-  ctx.ellipse(spx + 2, spy + player.size/2 + 2, player.size/2, player.size/4, 0, 0, Math.PI*2);
-  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.ellipse(spx+2,spy+8,7,3,0,0,Math.PI*2);
+  ctx.fillStyle='rgba(0,0,0,0.3)';
   ctx.fill();
 
-  // Player body (little person)
+  // Player — little person
   // Legs
-  ctx.fillStyle = '#4169e1';
-  ctx.fillRect(spx - 5, spy + 2, 4, 8);
-  ctx.fillRect(spx + 1, spy + 2, 4, 8);
+  ctx.fillStyle='#3050c0';
+  ctx.fillRect(spx-5,spy+2,4,9);
+  ctx.fillRect(spx+1,spy+2,4,9);
   // Body
-  ctx.fillStyle = '#e74c3c';
-  ctx.fillRect(spx - 6, spy - 6, 12, 10);
+  ctx.fillStyle='#e03030';
+  ctx.fillRect(spx-6,spy-8,12,12);
+  // Arms
+  ctx.fillStyle='#e03030';
+  ctx.fillRect(spx-10,spy-6,4,8);
+  ctx.fillRect(spx+6,spy-6,4,8);
   // Head
   ctx.beginPath();
-  ctx.arc(spx, spy - 10, 6, 0, Math.PI*2);
-  ctx.fillStyle = '#f4c07a';
+  ctx.arc(spx,spy-13,7,0,Math.PI*2);
+  ctx.fillStyle='#f5c07a';
   ctx.fill();
   // Eyes
-  ctx.fillStyle = '#333';
+  ctx.fillStyle='#333';
+  ctx.beginPath(); ctx.arc(spx-2,spy-14,1.2,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(spx+2,spy-14,1.2,0,Math.PI*2); ctx.fill();
+  // Smile
+  ctx.strokeStyle='#333';
+  ctx.lineWidth=1;
   ctx.beginPath();
-  ctx.arc(spx - 2, spy - 11, 1, 0, Math.PI*2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(spx + 2, spy - 11, 1, 0, Math.PI*2);
-  ctx.fill();
+  ctx.arc(spx,spy-12,3,0.2,Math.PI-0.2);
+  ctx.stroke();
 
   // Minimap
-  drawMinimap();
-}
-
-function drawMinimap() {
-  const mw = 80, mh = 80;
-  const mx = W - mw - 6, my = 6;
-  ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.fillRect(mx, my, mw, mh);
-  ctx.strokeStyle = '#4a7c4a';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(mx, my, mw, mh);
-
-  // Water on minimap
-  for (const w of water) {
-    ctx.fillStyle = '#2a6ea8';
-    ctx.fillRect(mx + w.x/MAP_W*mw, my + w.y/MAP_H*mh, w.w/MAP_W*mw, w.h/MAP_H*mh);
+  const mw=80,mh=80,mx=W-mw-5,my=5;
+  ctx.fillStyle='rgba(0,0,0,0.6)';
+  ctx.fillRect(mx,my,mw,mh);
+  // Ponds on minimap
+  for (const p of ponds) {
+    ctx.beginPath();
+    ctx.ellipse(mx+p.x/MAP_W*mw,my+p.y/MAP_H*mh,p.rx/MAP_W*mw,p.ry/MAP_H*mh,0,0,Math.PI*2);
+    ctx.fillStyle='#2a80d0';
+    ctx.fill();
   }
-
-  // Player on minimap
-  const mmx = mx + player.x/MAP_W*mw;
-  const mmy = my + player.y/MAP_H*mh;
+  // Player dot
   ctx.beginPath();
-  ctx.arc(mmx, mmy, 3, 0, Math.PI*2);
-  ctx.fillStyle = '#ff4444';
+  ctx.arc(mx+player.x/MAP_W*mw,my+player.y/MAP_H*mh,3,0,Math.PI*2);
+  ctx.fillStyle='#ff4444';
   ctx.fill();
+  ctx.strokeStyle='#4a7c4a';
+  ctx.lineWidth=1;
+  ctx.strokeRect(mx,my,mw,mh);
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.font='7px sans-serif';
+  ctx.textAlign='left';
+  ctx.fillText('карта',mx+2,my+mh-2);
+
+  ctx.textAlign='left';
 }
 
 function update() {
-  let dx = 0, dy = 0;
-  if (keys['ArrowUp'] || keys['w'])    dy = -1;
-  if (keys['ArrowDown'] || keys['s'])  dy =  1;
-  if (keys['ArrowLeft'] || keys['a'])  dx = -1;
-  if (keys['ArrowRight'] || keys['d']) dx =  1;
-
-  if (dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; }
-
-  const nx = player.x + dx * player.speed;
-  const ny = player.y + dy * player.speed;
-
-  if (!isColliding(nx, player.y)) player.x = nx;
-  if (!isColliding(player.x, ny)) player.y = ny;
-
+  let dx=0,dy=0;
+  if (keys['ArrowUp']||keys['w'])    dy=-1;
+  if (keys['ArrowDown']||keys['s'])  dy= 1;
+  if (keys['ArrowLeft']||keys['a'])  dx=-1;
+  if (keys['ArrowRight']||keys['d']) dx= 1;
+  if (dx&&dy) { dx*=0.707; dy*=0.707; }
+  const nx=player.x+dx*player.speed;
+  const ny=player.y+dy*player.speed;
+  if (!isColliding(nx,player.y)) player.x=nx;
+  if (!isColliding(player.x,ny)) player.y=ny;
   updateCamera();
-
-  const nearby = getNearbyName();
-  document.getElementById('info').textContent = nearby || 'Гуляете по парку...';
+  const nb=getNearby();
+  document.getElementById('info').textContent = nb||'Гуляете по парку...';
 }
 
-function loop() {
-  update();
-  draw();
-  requestAnimationFrame(loop);
-}
+function loop() { update(); draw(); requestAnimationFrame(loop); }
 
-// Keyboard
-document.addEventListener('keydown', e => { keys[e.key] = true; e.preventDefault(); });
-document.addEventListener('keyup', e => { keys[e.key] = false; });
+document.addEventListener('keydown',e=>{keys[e.key]=true;e.preventDefault();});
+document.addEventListener('keyup',e=>{keys[e.key]=false;});
 
-// D-pad buttons
-function holdDir(dx, dy) {
-  let interval;
-  const start = () => { keys[`__dpad_${dx}_${dy}`] = true; };
-  const stop = () => { keys[`__dpad_${dx}_${dy}`] = false; };
-  return { start, stop };
-}
-
-const dpad = {
-  up:    { key: 'ArrowUp' },
-  down:  { key: 'ArrowDown' },
-  left:  { key: 'ArrowLeft' },
-  right: { key: 'ArrowRight' },
-};
-
-Object.entries(dpad).forEach(([dir, { key }]) => {
-  const btn = document.getElementById(`dbtn-${dir}`);
-  const press = (e) => { e.preventDefault(); keys[key] = true; };
-  const release = (e) => { e.preventDefault(); keys[key] = false; };
-  btn.addEventListener('touchstart', press, { passive: false });
-  btn.addEventListener('touchend', release, { passive: false });
-  btn.addEventListener('mousedown', press);
-  btn.addEventListener('mouseup', release);
-  btn.addEventListener('mouseleave', release);
+['up','down','left','right'].forEach(dir=>{
+  const keyMap={up:'ArrowUp',down:'ArrowDown',left:'ArrowLeft',right:'ArrowRight'};
+  const btn=document.getElementById(`dbtn-${dir}`);
+  const k=keyMap[dir];
+  const on=e=>{e.preventDefault();keys[k]=true;};
+  const off=e=>{e.preventDefault();keys[k]=false;};
+  btn.addEventListener('touchstart',on,{passive:false});
+  btn.addEventListener('touchend',off,{passive:false});
+  btn.addEventListener('mousedown',on);
+  btn.addEventListener('mouseup',off);
+  btn.addEventListener('mouseleave',off);
 });
 
 updateCamera();
