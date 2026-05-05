@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>GTA: San Andreas 2D</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#000;display:flex;align-items:center;justify-content:flex-start;flex-direction:column;height:100vh;overflow:hidden;touch-action:none;font-family:'Courier New',monospace;}
+#wrap{position:relative;}
+#cv{display:block;}
+/* Controls */
+#ctrl{position:absolute;bottom:8px;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-end;padding:0 8px;pointer-events:none;}
+#dpad{display:grid;grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,46px);gap:4px;pointer-events:all;}
+#actions{display:flex;flex-direction:column;gap:6px;pointer-events:all;}
+.db{background:rgba(0,0,0,.6);border:2px solid rgba(255,255,255,.3);border-radius:10px;color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none;}
+.db:active{background:rgba(255,255,255,.2);}
+#du{grid-column:2;grid-row:1;}
+#dl{grid-column:1;grid-row:2;}
+#dc{grid-column:2;grid-row:2;font-size:10px;color:#aaa;}
+#dr{grid-column:3;grid-row:2;}
+#dd{grid-column:2;grid-row:3;}
+#btn-action{width:60px;height:60px;background:rgba(200,50,50,.7);border:2px solid #ff4444;border-radius:50%;font-size:13px;font-weight:bold;}
+#btn-run{width:50px;height:50px;background:rgba(50,100,200,.7);border:2px solid #4488ff;border-radius:50%;font-size:11px;}
+/* Dialog */
+#dialog{position:absolute;bottom:170px;left:10px;right:10px;background:rgba(0,0,0,.85);border:2px solid #555;border-radius:8px;padding:10px;display:none;}
+#dialog-name{color:#f0c040;font-size:12px;font-weight:bold;margin-bottom:4px;}
+#dialog-text{color:#fff;font-size:13px;line-height:1.4;}
+#dialog-tap{color:#888;font-size:10px;text-align:right;margin-top:6px;}
+/* HUD */
+#hud{position:absolute;top:6px;left:6px;right:6px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;}
+#wanted{display:flex;gap:3px;}
+.star{font-size:16px;opacity:.3;}
+.star.on{opacity:1;}
+#objective{position:absolute;top:6px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#f0c040;font-size:11px;padding:3px 10px;border-radius:6px;text-align:center;max-width:200px;}
+#health-bar{width:80px;}
+#hp-label{color:#ff4444;font-size:10px;}
+#hp-bg{background:#333;height:8px;border-radius:4px;margin-top:2px;}
+#hp-fill{background:#ff4444;height:8px;border-radius:4px;width:100%;}
+/* Cutscene */
+#cutscene{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.9);display:none;flex-direction:column;justify-content:center;align-items:center;padding:20px;}
+#cs-year{color:#f0c040;font-size:28px;font-weight:bold;letter-spacing:4px;margin-bottom:10px;}
+#cs-text{color:#fff;font-size:14px;text-align:center;line-height:1.6;max-width:320px;}
+#cs-tap{color:#888;font-size:11px;margin-top:20px;}
+</style>
+</head>
+<body>
+<div id="wrap">
+<canvas id="cv"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="health-bar"><div id="hp-label">HP ❤️</div><div id="hp-bg"><div id="hp-fill"></div></div></div>
+  <div id="objective"></div>
+  <div id="wanted"><span class="star" id="s1">★</span><span class="star" id="s2">★</span><span class="star" id="s3">★</span></div>
+</div>
+
+<!-- Dialog box -->
+<div id="dialog">
+  <div id="dialog-name"></div>
+  <div id="dialog-text"></div>
+  <div id="dialog-tap">Нажми A чтобы продолжить</div>
+</div>
+
+<!-- Controls -->
+<div id="ctrl">
+  <div id="dpad">
+    <div class="db" id="du">▲</div>
+    <div class="db" id="dl">◀</div>
+    <div class="db" id="dc">CJ</div>
+    <div class="db" id="dr">▶</div>
+    <div class="db" id="dd">▼</div>
+  </div>
+  <div id="actions">
+    <button class="db" id="btn-run">🏃RUN</button>
+    <button class="db" id="btn-action">A</button>
+  </div>
+</div>
+
+<!-- Cutscene overlay -->
+<div id="cutscene">
+  <div id="cs-year"></div>
+  <div id="cs-text"></div>
+  <div id="cs-tap">Нажми чтобы продолжить</div>
+</div>
+</div>
+
+<script>
+const W=Math.min(window.innerWidth,420);
+const H=window.innerHeight;
+const cv=document.getElementById('cv');
+cv.width=W;cv.height=H;
+const c=cv.getContext('2d');
+document.getElementById('wrap').style.width=W+'px';
+document.getElementById('wrap').style.height=H+'px';
+
+// ═══════════ KEYS ═══════════
+const K={};const JP={};
+['du','dl','dr','dd','btn-action','btn-run'].forEach(id=>{
+  const el=document.getElementById(id);
+  const key={du:'ArrowUp',dl:'ArrowLeft',dr:'ArrowRight',dd:'ArrowDown','btn-action':'action','btn-run':'run'}[id];
+  const on=e=>{e.preventDefault();if(!K[key])JP[key]=true;K[key]=true;};
+  const off=e=>{e.preventDefault();K[key]=false;};
+  el.addEventListener('touchstart',on,{passive:false});
+  el.addEventListener('touchend',off,{passive:false});
+  el.addEventListener('mousedown',on);el.addEventListener('mouseup',off);el.addEventListener('mouseleave',off);
+});
+document.addEventListener('keydown',e=>{if(!K[e.key])JP[e.key]=true;K[e.key]=true;});
+document.addEventListener('keyup',e=>K[e.key]=false);
+
+// ═══════════ MAP ═══════════
+const TILE=70,COLS=20,ROWS=20,MW=COLS*TILE,MH=ROWS*TILE;
+// 0=road 1=building 2=grass 3=grove 4=ballas-zone 5=airport
+const MAP=[
+  [1,1,1,5,5,5,5,5,5,5,5,5,1,1,1,1,1,1,1,1],
+  [1,1,1,5,5,5,5,5,5,5,5,5,1,1,1,1,1,1,1,1],
+  [1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1],
+  [0,0,0,0,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1],
+  [1,1,1,0,1,1,1,1,1,1,1,1,0,1,4,4,4,1,1,1],
+  [1,1,1,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1],
+  [1,1,1,0,1,1,1,1,1,1,1,1,0,1,4,4,4,1,1,1],
+  [1,1,1,0,1,1,1,1,1,1,1,1,0,1,4,4,4,1,1,1],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],
+  [1,1,1,0,1,1,1,2,2,1,1,1,0,1,1,1,1,1,1,1],
+  [1,1,1,0,1,1,2,2,2,2,1,1,0,1,1,1,1,1,1,1],
+  [1,1,1,0,1,2,2,2,2,2,2,1,0,1,1,1,1,1,1,1],
+  [1,1,1,0,1,1,2,2,2,2,1,1,0,1,1,1,1,1,1,1],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],
+  [3,3,3,0,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1],
+  [3,3,3,0,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1],
+  [3,3,0,0,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1],
+  [3,3,3,0,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1],
+  [3,3,3,0,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1],
+  [3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1],
+];
+const TILE_COLORS=['#555','#8a7a6a','#3a7a3a','#2a6a2a','#6a2a8a','#888'];
+const TILE_NAMES=['road','building','park','grove','ballas','airport'];
+
+function isSolid(tx,ty){
+  if(tx<0||tx>=COLS||ty<0||ty>=ROWS)return true;
+  return MAP[ty][tx]===1;
+}
+function worldTileAt(wx,wy){
+  const tx=Math.floor(wx/TILE),ty=Math.floor(wy/TILE);
+  if(tx<0||tx>=COLS||ty<0||ty>=ROWS)return 0;
+  return MAP[ty][tx];
+}
+
+// ═══════════ PLAYER ═══════════
+const PL={
+  x:5*TILE+35,y:2*TILE+35,
+  angle:0,vx:0,vy:0,
+  hp:100,onBike:false,
+  speed:0,maxSpeed:3,
+  bikeX:6*TILE,bikeY:3*TILE,
+  hasBike:false,
+};
+
+// ═══════════ NPCS ═══════════
+let npcs=[];
+let bullets=[];
+let particles=[];
+
+function spawnNpc(x,y,type){
+  npcs.push({x,y,type,hp:40,vx:0,vy:0,angle:0,shootTimer:0,id:Math.random()});
+}
+
+// ═══════════ CAMERA ═══════════
+let camX=0,camY=0;
+function updateCam(){
+  camX=PL.x-W/2;camY=PL.y-H/2;
+  camX=Math.max(0,Math.min(MW-W,camX));
+  camY=Math.max(0,Math.min(MH-H,camY));
+}
+function ws(x,y){return[x-camX,y-camY];}
+
+// ═══════════ GAME STATE ═══════════
+let scene='cutscene';
+let frame=0;
+let wanted=0;
+let wantedTimer=0;
+let missionStep=0;
+let dialogQueue=[];
+let dialogActive=false;
+let objective='';
+let missionComplete=false;
+
+// ═══════════ CUTSCENES ═══════════
+const CUTSCENES=[
+  // Scene 0: intro
+  {year:'1992',cards:[
+    '«Где-то в небе над Сан-Андреасом...»\n\nКарл Джонсон летит домой.\nПять лет он провёл в Liberty City.\nТеперь его вызвали обратно.',
+    'Он не знал, что на выходе из аэропорта его уже ждут...',
+    'Офицеры Тенпенни и Пьюласки.\nКоррумпированные копы из CRASH.\n«Добро пожаловать домой, Карл.»',
+    'Они везут его через весь Лос-Сантос\nи выбрасывают прямо в территорию Баллас.\n\n«Попробуй выжить, Карл.»',
+  ]},
+  // Scene 1: grove arrival
+  {year:'',cards:[
+    'CJ:\n«Гроув Стрит. Дом.\nХотя бы так говорят...»',
+    'Биг Смоук:\n«Карл! Братан, где ты пропадал?\nМы думали, ты пропал навсегда!»',
+    'Свит:\n«Мама умерла, Карл.\nПрямо здесь. В нашем доме.»\n\nCJ молчит.',
+    'Райдер:\n«Слышь, Баллас не дремлют.\nПохороны завтра. Держись, братан.»',
+  ]},
+  // Scene 2: driveby warning
+  {year:'',cards:[
+    'Вдруг из-за угла вылетает фиолетовый Greenwood...',
+    'Баллас открывают огонь прямо на похоронах!\n\n«В укрытие! ЛОЖИСЬ!»',
+  ]},
+  // Scene 3: escape
+  {year:'',cards:[
+    'Копы уже едут. Надо уходить на великах.\nБиг Смоук: «Держись рядом, CJ!»',
+    'CJ и братва уходят через переулки.\nЛос-Сантос встречает тебя как всегда — неласково.',
+    '✅ МИССИЯ ВЫПОЛНЕНА\n«Возвращение домой»\n\n$0 | Уважение +',
+  ]},
+];
+let csIdx=0;let csCard=0;
+function showCutscene(idx){
+  scene='cutscene';csIdx=idx;csCard=0;
+  displayCard();
+}
+function displayCard(){
+  const cs=CUTSCENES[csIdx];
+  document.getElementById('cutscene').style.display='flex';
+  document.getElementById('cs-year').textContent=cs.year||'';
+  document.getElementById('cs-text').textContent=cs.cards[csCard];
+}
+function advanceCutscene(){
+  const cs=CUTSCENES[csIdx];
+  csCard++;
+  if(csCard>=cs.cards.length){
+    document.getElementById('cutscene').style.display='none';
+    afterCutscene(csIdx);
+  }else{
+    displayCard();
+  }
+}
+
+function afterCutscene(idx){
+  if(idx===0){startMission1();}
+  else if(idx===1){startMission2();}
+  else if(idx===2){startMission3();}
+  else if(idx===3){startMission4();}
+}
+
+// ═══════════ MISSIONS ═══════════
+function startMission1(){
+  scene='play';
+  PL.x=8*TILE;PL.y=2*TILE+20;PL.onBike=false;PL.hasBike=false;
+  PL.bikeX=6*TILE+20;PL.bikeY=4*TILE;
+  updateCam();
+  objective='Найди велосипед! Держись подальше от Баллас';
+  // Spawn Ballas
+  spawnNpc(12*TILE,4*TILE,'ballas');
+  spawnNpc(14*TILE,6*TILE,'ballas');
+  spawnNpc(13*TILE,5*TILE,'ballas');
+  missionStep=1;
+}
+function startMission2(){
+  scene='play';
+  objective='Доберись до Гроув Стрит!';
+  npcs=[];
+  // Ballas car (represented as fast npc)
+  spawnNpc(12*TILE,8*TILE,'ballas');
+  missionStep=2;
+  wanted=1;updateWantedHUD();
+}
+function startMission3(){
+  scene='play';
+  objective='Выживи под огнём Баллас!';
+  // Spawn drive-by car
+  npcs=[];
+  npcs.push({x:5*TILE,y:15*TILE,type:'ballascar',hp:200,vx:4,vy:0,angle:0,shootTimer:30,id:Math.random()});
+  missionStep=3;
+}
+function startMission4(){
+  scene='play';
+  objective='Уходи от копов! Следуй за Биг Смоуком';
+  npcs=[];
+  // Cop cars chase
+  spawnNpc(5*TILE,8*TILE,'cop');
+  spawnNpc(8*TILE,10*TILE,'cop');
+  wanted=2;updateWantedHUD();
+  missionStep=4;
+}
+
+// ═══════════ DIALOG SYSTEM ═══════════
+function showDialog(name,text){
+  document.getElementById('dialog').style.display='block';
+  document.getElementById('dialog-name').textContent=name;
+  document.getElementById('dialog-text').textContent=text;
+  dialogActive=true;
+  scene='dialog';
+}
+function closeDialog(){
+  document.getElementById('dialog').style.display='none';
+  dialogActive=false;
+  if(dialogQueue.length>0){
+    const {name,text,after}=dialogQueue.shift();
+    if(after){after();}else{scene='play';}
+  }else{scene='play';}
+}
+
+function updateWantedHUD(){
+  for(let i=1;i<=3;i++){
+    document.getElementById('s'+i).className='star'+(i<=wanted?' on':'');
+  }
+}
+
+// ═══════════ DRAWING ═══════════
+function drawMap(){
+  for(let ty=0;ty<ROWS;ty++)for(let tx=0;tx<COLS;tx++){
+    const cell=MAP[ty][tx];
+    const[sx,sy]=ws(tx*TILE,ty*TILE);
+    if(sx+TILE<0||sx>W||sy+TILE<0||sy>H)continue;
+    c.fillStyle=TILE_COLORS[cell];
+    c.fillRect(sx,sy,TILE,TILE);
+    // Road markings
+    if(cell===0){
+      c.fillStyle='rgba(255,255,255,.15)';
+      c.fillRect(sx+TILE/2-1,sy,2,TILE);
+      c.fillRect(sx,sy+TILE/2-1,TILE,2);
+    }
+    // Building windows
+    if(cell===1){
+      c.fillStyle='rgba(255,255,150,.12)';
+      for(let wy=8;wy<TILE-8;wy+=14)for(let wx=8;wx<TILE-8;wx+=12)
+        if((tx+ty+wx+wy)%7>2)c.fillRect(sx+wx,sy+wy,7,9);
+    }
+    // Ballas zone graffiti
+    if(cell===4){
+      c.fillStyle='rgba(150,0,200,.2)';c.fillRect(sx,sy,TILE,TILE);
+      c.fillStyle='rgba(200,0,255,.3)';c.font='bold 9px sans-serif';c.textAlign='center';
+      c.fillText('B',sx+TILE/2,sy+TILE/2+4);
+    }
+    // Grove Street
+    if(cell===3){
+      c.fillStyle='rgba(0,100,0,.2)';c.fillRect(sx,sy,TILE,TILE);
+      c.fillStyle='rgba(0,180,0,.15)';
+      for(let dy=0;dy<TILE;dy+=8)c.fillRect(sx+(dy%16===0?5:0),sy+dy,TILE-(dy%16===0?10:0),3);
+    }
+  }
+
+  // CJ's house marker on Grove St
+  const[hx,hy]=ws(1*TILE+30,16*TILE+30);
+  c.fillStyle='#2a4a2a';c.fillRect(hx-15,hy-20,40,35);
+  c.fillStyle='#cc8844';c.fillRect(hx-5,hy+5,15,10);// door
+  c.fillStyle='#888';c.fillRect(hx-13,hy-18,36,4);// roof
+  c.fillStyle='#4a2a1a';c.beginPath();c.moveTo(hx-15,hy-18);c.lineTo(hx+10,hy-30);c.lineTo(hx+25,hy-18);c.fill();
+
+  // Big Smoke's house
+  const[bsx,bsy]=ws(1*TILE+80,14*TILE+30);
+  c.fillStyle='#3a3a4a';c.fillRect(bsx-15,bsy-20,45,38);
+  c.fillStyle='#aa6633';c.fillRect(bsx-3,bsy+8,12,10);
+  c.fillStyle='rgba(255,220,100,.3)';c.fillRect(bsx+15,bsy-10,10,14);
+
+  // Airport label
+  const[ax,ay]=ws(5*TILE,1*TILE);
+  c.fillStyle='rgba(255,255,255,.4)';c.font='bold 11px sans-serif';c.textAlign='center';
+  c.fillText('✈ АЭРОПОРТ',ax+2*TILE,ay+TILE/2);
+
+  // Ballas zone label
+  const[bx2,by2]=ws(14*TILE,5*TILE);
+  c.fillStyle='rgba(200,0,255,.5)';c.font='bold 10px sans-serif';
+  c.fillText('⚠ ТЕРРИТОРИЯ БАЛЛАС',bx2+20,by2+TILE/2);
+
+  // Grove Street label
+  const[gx,gy]=ws(1*TILE,14*TILE);
+  c.fillStyle='rgba(0,255,80,.5)';c.font='bold 10px sans-serif';
+  c.fillText('ГРОУВ СТРИТ',gx+TILE/2,gy+TILE/2);
+}
+
+function drawBike(x,y){
+  const[sx,sy]=ws(x,y);
+  if(!PL.hasBike){
+    // Glowing marker
+    const glow=Math.sin(frame*.08)*.5+.5;
+    c.fillStyle=`rgba(0,255,200,${glow*.5})`;c.beginPath();c.arc(sx,sy,20,0,Math.PI*2);c.fill();
+    c.fillStyle='#00ffcc';c.font='20px sans-serif';c.textAlign='center';
+    c.fillText('🚲',sx,sy+7);
+    c.fillStyle='#fff';c.font='bold 9px sans-serif';c.fillText('ВЕЛИК',sx,sy+22);
+  }
+}
+
+function drawPlayer(){
+  const[sx,sy]=ws(PL.x,PL.y);
+  const r=14;
+  // Shadow
+  c.beginPath();c.ellipse(sx+3,sy+5,r*.8,r*.4,PL.angle,0,Math.PI*2);
+  c.fillStyle='rgba(0,0,0,.3)';c.fill();
+
+  c.save();c.translate(sx,sy);c.rotate(PL.angle);
+
+  if(PL.onBike){
+    // Bike frame
+    c.fillStyle='#aaa';c.fillRect(-16,-5,32,4);
+    c.strokeStyle='#ccc';c.lineWidth=2;
+    c.beginPath();c.arc(-12,6,7,0,Math.PI*2);c.stroke();
+    c.beginPath();c.arc(12,6,7,0,Math.PI*2);c.stroke();
+    // Handlebar
+    c.fillStyle='#888';c.fillRect(-16,-8,6,4);
+  }
+
+  // Body
+  c.fillStyle='#2a6a2a'; // Grove green
+  c.fillRect(-7,-16,14,20);
+  // Legs
+  c.fillStyle='#1a1a4a';
+  const lk=PL.onBike?0:Math.sin(frame*.15)*6;
+  c.fillRect(-6,4,5,12+lk);c.fillRect(2,4,5,12-lk);
+  // Head
+  c.beginPath();c.arc(0,-20,9,0,Math.PI*2);c.fillStyle='#c8856a';c.fill();
+  // Cap (CJ's cap)
+  c.fillStyle='#1a1a1a';c.beginPath();c.arc(0,-26,9,Math.PI,0);c.fill();
+  c.fillRect(-10,-26,20,5);
+  // Face
+  c.fillStyle='#000';c.beginPath();c.arc(-3,-21,2,0,Math.PI*2);c.fill();
+  c.beginPath();c.arc(3,-21,2,0,Math.PI*2);c.fill();
+  c.restore();
+
+  // HP bar
+  if(PL.hp<100){
+    c.fillStyle='rgba(0,0,0,.5)';c.fillRect(sx-15,sy-r-12,30,5);
+    c.fillStyle='#ff4444';c.fillRect(sx-15,sy-r-12,30*PL.hp/100,5);
+  }
+  // Arrow to objective
+  drawObjectiveArrow(sx,sy);
+}
+
+function drawObjectiveArrow(sx,sy){
+  let tx=0,ty=0;
+  if(missionStep===1){tx=ws(PL.bikeX,PL.bikeY)[0];ty=ws(PL.bikeX,PL.bikeY)[1];}
+  else if(missionStep===2||missionStep===3||missionStep===4){tx=ws(1*TILE+50,16*TILE+50)[0];ty=ws(1*TILE+50,16*TILE+50)[1];}
+  else return;
+  const dx=tx-sx,dy=ty-sy;
+  const dist=Math.hypot(dx,dy);
+  if(dist<80)return;
+  const a=Math.atan2(dy,dx);
+  const arx=sx+Math.cos(a)*30,ary=sy+Math.sin(a)*30;
+  c.fillStyle='rgba(255,255,0,.8)';
+  c.save();c.translate(arx,ary);c.rotate(a);
+  c.beginPath();c.moveTo(10,0);c.lineTo(-6,-6);c.lineTo(-6,6);c.closePath();c.fill();
+  c.restore();
+  c.fillStyle='#ffff00';c.font='10px sans-serif';c.textAlign='center';
+  c.fillText(Math.round(dist/TILE*7)+'м',arx,ary-12);
+}
+
+function drawNpc(n){
+  const[sx,sy]=ws(n.x,n.y);
+  if(sx<-30||sx>W+30||sy<-30||sy>H+30)return;
+  c.save();c.translate(sx,sy);c.rotate(n.angle);
+
+  if(n.type==='ballascar'){
+    c.fillStyle='#6a1a8a';c.fillRect(-22,-12,44,24);
+    c.fillStyle='#8a2aaa';c.fillRect(-18,-10,40,20);
+    c.fillStyle='rgba(150,200,255,.4)';c.fillRect(-10,-8,15,8);c.fillRect(8,-8,12,8);
+    c.fillStyle='#ff4444';c.fillRect(-22,6,8,6);c.fillRect(14,6,8,6);
+    return c.restore();
+  }
+  if(n.type==='cop'){
+    c.fillStyle='#1a1a8a';c.fillRect(-20,-10,40,20);
+    c.fillStyle='#2a2aaa';c.fillRect(-16,-8,36,16);
+    c.fillStyle='rgba(150,200,255,.4)';c.fillRect(-8,-6,14,6);c.fillRect(8,-6,10,6);
+    // Lights
+    const lt=frame%20<10;
+    c.fillStyle=lt?'#ff0000':'#0000ff';c.fillRect(-4,8,6,4);
+    c.fillStyle=lt?'#0000ff':'#ff0000';c.fillRect(4,8,6,4);
+    return c.restore();
+  }
+  // Walking NPC
+  const col=n.type==='ballas'?'#6a1a8a':'#1a6a1a';
+  c.fillStyle=col;c.fillRect(-6,-14,12,18);
+  c.fillStyle='#1a1a4a';c.fillRect(-5,4,4,10);c.fillRect(2,4,4,10);
+  c.beginPath();c.arc(0,-18,8,0,Math.PI*2);c.fillStyle='#c8856a';c.fill();
+  // Gun flash
+  if(n.shootTimer>0&&n.shootTimer%5<2){
+    c.fillStyle='rgba(255,200,50,.8)';c.beginPath();c.arc(12,-10,6,0,Math.PI*2);c.fill();
+  }
+  c.restore();
+  // HP bar
+  c.fillStyle='#ff2222';c.fillRect(sx-12,sy-26,24*(n.hp/40),3);
+}
+
+function drawBullet(b){
+  const[sx,sy]=ws(b.x,b.y);
+  c.fillStyle='#ffff00';c.beginPath();c.arc(sx,sy,3,0,Math.PI*2);c.fill();
+}
+
+function drawParticle(p){
+  const[sx,sy]=ws(p.x,p.y);
+  c.globalAlpha=p.life/p.maxLife;
+  c.fillStyle=p.col;c.beginPath();c.arc(sx,sy,p.r,0,Math.PI*2);c.fill();
+  c.globalAlpha=1;
+}
+
+function drawMinimap(){
+  const mw=80,mh=80,mx=W-mh-6,my=6;
+  c.fillStyle='rgba(0,0,0,.6)';c.fillRect(mx,my,mw,mh);
+  // Tiles
+  for(let ty=0;ty<ROWS;ty++)for(let tx=0;tx<COLS;tx++){
+    const cell=MAP[ty][tx];
+    if(cell===0)continue;
+    c.fillStyle={1:'rgba(150,130,100,.5)',2:'rgba(50,150,50,.5)',3:'rgba(0,180,0,.5)',4:'rgba(120,0,180,.5)',5:'rgba(150,150,150,.5)'}[cell]||'';
+    c.fillRect(mx+tx*(mw/COLS),my+ty*(mh/ROWS),mw/COLS,mh/ROWS);
+  }
+  // Player dot
+  const px=mx+PL.x/MW*mw,py=my+PL.y/MH*mh;
+  c.fillStyle='#00ff00';c.beginPath();c.arc(px,py,2.5,0,Math.PI*2);c.fill();
+  // Objective dot
+  let ox=0,oy=0;
+  if(missionStep===1){ox=PL.bikeX/MW*mw;oy=PL.bikeY/MH*mh;}
+  else{ox=1.5*TILE/MW*mw;oy=16*TILE/MH*mh;}
+  c.fillStyle='#ffff00';c.beginPath();c.arc(mx+ox,my+oy,2,0,Math.PI*2);c.fill();
+  c.strokeStyle='#888';c.lineWidth=1;c.strokeRect(mx,my,mw,mh);
+}
+
+// ═══════════ UPDATE ═══════════
+function updatePlayer(){
+  const spd=PL.onBike?5.5:K.run?3.5:2.5;
+  let dx=0,dy=0;
+  if(K.ArrowUp)dy=-1;if(K.ArrowDown)dy=1;
+  if(K.ArrowLeft)dx=-1;if(K.ArrowRight)dx=1;
+  if(dx&&dy){dx*=.707;dy*=.707;}
+  if(dx||dy)PL.angle=Math.atan2(dy,dx);
+
+  const nx=PL.x+dx*spd,ny=PL.y+dy*spd;
+  const ts=16;
+  if(!isSolid(Math.floor((nx+ts)/TILE),Math.floor((PL.y+ts)/TILE))&&
+     !isSolid(Math.floor((nx+ts)/TILE),Math.floor((PL.y-ts)/TILE)))PL.x=nx;
+  if(!isSolid(Math.floor((PL.x+ts)/TILE),Math.floor((ny+ts)/TILE))&&
+     !isSolid(Math.floor((PL.x-ts)/TILE),Math.floor((ny+ts)/TILE)))PL.y=ny;
+  PL.x=Math.max(ts,Math.min(MW-ts,PL.x));
+  PL.y=Math.max(ts,Math.min(MH-ts,PL.y));
+
+  // Pick up bike
+  if(!PL.hasBike&&missionStep===1){
+    const bd=Math.hypot(PL.x-PL.bikeX,PL.y-PL.bikeY);
+    if(bd<40){PL.hasBike=true;PL.onBike=true;objective='Теперь езжай на Гроув Стрит!';}
+  }
+
+  // Check arrival at Grove Street
+  const gd=Math.hypot(PL.x-1.5*TILE,PL.y-16.5*TILE);
+  if(gd<80&&(missionStep===2||missionStep===1&&PL.hasBike)){
+    if(!missionComplete){
+      missionComplete=true;
+      npcs=[];
+      if(missionStep<=2){
+        setTimeout(()=>showCutscene(1),500);
+        missionStep=10;
+      }
+    }
+  }
+}
+
+function updateNpcs(){
+  for(let i=npcs.length-1;i>=0;i--){
+    const n=npcs[i];
+    if(n.hp<=0){
+      for(let j=0;j<6;j++)particles.push({x:n.x,y:n.y,vx:(Math.random()-.5)*3,vy:(Math.random()-.5)*3,life:30,maxLife:30,r:3,col:'#ff4444'});
+      npcs.splice(i,1);continue;
+    }
+
+    if(n.type==='ballascar'){
+      n.x+=n.vx;n.y+=n.vy;
+      if(n.x>MW||n.x<0||n.y>MH||n.y<0){npcs.splice(i,1);continue;}
+      n.shootTimer--;
+      if(n.shootTimer<=0){
+        n.shootTimer=25;
+        const dx=PL.x-n.x,dy=PL.y-n.y;
+        const d=Math.hypot(dx,dy);
+        if(d<400)bullets.push({x:n.x,y:n.y,vx:dx/d*7,vy:dy/d*7,owner:'enemy'});
+      }
+      // Drive-by complete
+      if(missionStep===3&&n.x>12*TILE){
+        npcs.splice(i,1);
+        setTimeout(()=>{missionComplete=false;showCutscene(2);missionStep=10;},500);
+      }
+      continue;
+    }
+
+    if(n.type==='cop'){
+      const dx=PL.x-n.x,dy=PL.y-n.y;
+      const d=Math.hypot(dx,dy);
+      if(d>30){n.x+=dx/d*2.5;n.y+=dy/d*2.5;}
+      n.shootTimer--;
+      if(n.shootTimer<=0&&d<300){
+        n.shootTimer=60;
+        bullets.push({x:n.x,y:n.y,vx:dx/d*6,vy:dy/d*6,owner:'enemy'});
+      }
+      // Escape condition: reach far south-east
+      if(missionStep===4&&Math.hypot(PL.x-18*TILE,PL.y-19*TILE)<120){
+        npcs=[];wanted=0;updateWantedHUD();
+        setTimeout(()=>showCutscene(3),300);
+        missionStep=10;
+      }
+      continue;
+    }
+
+    // Ballas foot NPC
+    const dx=PL.x-n.x,dy=PL.y-n.y;
+    const d=Math.hypot(dx,dy);
+    if(d<400&&d>60){n.x+=dx/d*1.8;n.y+=dy/d*1.8;}
+    n.shootTimer--;
+    if(n.shootTimer<=0&&d<280){
+      n.shootTimer=50;
+      bullets.push({x:n.x,y:n.y,vx:dx/d*6,vy:dy/d*6,owner:'enemy'});
+    }
+  }
+}
+
+function updateBullets(){
+  for(let i=bullets.length-1;i>=0;i--){
+    const b=bullets[i];
+    b.x+=b.vx;b.y+=b.vy;
+    if(b.x<0||b.x>MW||b.y<0||b.y>MH){bullets.splice(i,1);continue;}
+    if(isSolid(Math.floor(b.x/TILE),Math.floor(b.y/TILE))){
+      particles.push({x:b.x,y:b.y,vx:0,vy:0,life:10,maxLife:10,r:4,col:'#ffaa00'});
+      bullets.splice(i,1);continue;
+    }
+    if(b.owner==='enemy'){
+      const d=Math.hypot(b.x-PL.x,b.y-PL.y);
+      if(d<20){
+        PL.hp=Math.max(0,PL.hp-10);
+        document.getElementById('hp-fill').style.width=PL.hp+'%';
+        particles.push({x:PL.x,y:PL.y,vx:0,vy:0,life:8,maxLife:8,r:5,col:'#ff0000'});
+        bullets.splice(i,1);
+        if(PL.hp<=0)gameOver();
+      }
+    }
+  }
+}
+
+function updateParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.life--;
+    if(p.life<=0)particles.splice(i,1);
+  }
+}
+
+function gameOver(){
+  scene='gameover';
+}
+
+// ═══════════ INPUT ═══════════
+cv.addEventListener('touchstart',e=>{
+  if(scene==='cutscene')advanceCutscene();
+  if(scene==='dialog')closeDialog();
+},{passive:true});
+cv.addEventListener('click',e=>{
+  if(scene==='cutscene')advanceCutscene();
+  if(scene==='dialog')closeDialog();
+});
+document.getElementById('btn-action').addEventListener('touchstart',e=>{
+  e.preventDefault();
+  if(scene==='cutscene'){advanceCutscene();return;}
+  if(scene==='dialog'){closeDialog();return;}
+  if(scene==='gameover'){restartGame();return;}
+  if(scene==='play'){
+    // Shoot (if wanted)
+    if(wanted>0){
+      const a=PL.angle;
+      bullets.push({x:PL.x,y:PL.y,vx:Math.cos(a)*9,vy:Math.sin(a)*9,owner:'player'});
+    }
+  }
+},{passive:false});
+
+function restartGame(){
+  PL.x=5*TILE+35;PL.y=2*TILE+35;PL.hp=100;PL.onBike=false;PL.hasBike=false;
+  npcs=[];bullets=[];particles=[];wanted=0;missionStep=0;missionComplete=false;
+  document.getElementById('hp-fill').style.width='100%';
+  updateWantedHUD();
+  showCutscene(0);
+}
+
+// ═══════════ MAIN LOOP ═══════════
+function loop(){
+  frame++;
+  c.clearRect(0,0,W,H);
+
+  if(scene==='play'||scene==='dialog'){
+    updatePlayer();
+    updateNpcs();
+    updateBullets();
+    updateParticles();
+    updateCam();
+    drawMap();
+    if(!PL.hasBike)drawBike(PL.bikeX,PL.bikeY);
+    particles.forEach(drawParticle);
+    npcs.forEach(drawNpc);
+    bullets.forEach(drawBullet);
+    drawPlayer();
+    drawMinimap();
+    // Objective text
+    document.getElementById('objective').textContent=objective;
+    // Mission 4 exit marker
+    if(missionStep===4){
+      const[ex,ey]=ws(18*TILE,19*TILE);
+      const gl=Math.sin(frame*.1)*.5+.5;
+      c.fillStyle=`rgba(0,255,0,${gl*.4})`;c.fillRect(ex,ey,TILE*2,TILE);
+      c.fillStyle='#00ff00';c.font='bold 11px sans-serif';c.textAlign='center';
+      c.fillText('УХОДИ ОТСЮДА →',ex+TILE,ey+TILE/2+4);
+    }
+  }
+
+  if(scene==='gameover'){
+    c.fillStyle='rgba(0,0,0,.8)';c.fillRect(0,0,W,H);
+    c.fillStyle='#ff4444';c.font='bold 28px Courier New';c.textAlign='center';
+    c.fillText('WASTED',W/2,H*.4);
+    c.fillStyle='#888';c.font='14px Courier New';
+    c.fillText('Нажми A чтобы продолжить',W/2,H*.5);
+  }
+
+  c.textAlign='left';
+  requestAnimationFrame(loop);
+  for(const k in JP)delete JP[k];
+}
+
+// ═══════════ START ═══════════
+showCutscene(0);
+updateWantedHUD();
+loop();
+</script>
+</body>
+</html>
