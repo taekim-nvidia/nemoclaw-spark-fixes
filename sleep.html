@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Режим сна</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0a0010;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;height:100vh;overflow:hidden;touch-action:none;font-family:'Georgia',serif;}
+#cv{display:block;}
+#ui{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:420px;padding:8px;background:rgba(0,0,0,.7);border-top:1px solid rgba(255,255,255,.1);}
+#info{color:#c8d8ff;font-size:12px;text-align:center;margin-bottom:6px;min-height:32px;line-height:1.4;}
+#btns{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;}
+.btn{background:rgba(60,80,160,.85);border:1px solid #8090d0;border-radius:10px;color:#fff;font-size:13px;padding:8px 14px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none;flex-shrink:0;}
+.btn:active{background:rgba(100,130,220,1);}
+.btn.danger{background:rgba(160,40,40,.85);border-color:#c04040;}
+.btn.good{background:rgba(40,120,60,.85);border-color:#50c070;}
+.btn.sleep{background:rgba(80,40,140,.9);border-color:#b080ff;font-size:15px;font-weight:bold;padding:10px 20px;}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="ui">
+  <div id="info">Загрузка...</div>
+  <div id="btns"></div>
+</div>
+<script>
+const W=Math.min(window.innerWidth,420);
+const UI_H=100;
+const H=window.innerHeight-UI_H;
+const cv=document.getElementById('cv');
+cv.width=W;cv.height=H;
+const c=cv.getContext('2d');
+
+// ── GAME STATE ─────────────────────────────────
+let day=1;
+const MAX_DAYS=7;
+// Sleep time in hours (0-24). Start at bad schedule: 4am sleep, noon wake
+let sleepHour=4;   // when they go to sleep
+let wakeHour=13;   // when they wake
+const TARGET_SLEEP=23; // 23:00
+const TARGET_WAKE=7;   // 07:00
+
+let energy=60;     // 0-100
+let sleepDebt=40;  // 0-100 (higher = worse)
+let mood=50;       // 0-100
+
+// Current hour in day (starts at wakeHour)
+let curHour=0;
+let dayPhase='awake'; // 'awake','sleepy','asleep','wakeup'
+let frame=0;
+let animHour=0; // displayed clock hour (animates)
+
+let pendingChoices=[];
+let message='';
+let gameOver=false;
+let gameWon=false;
+
+// Events that happen during the day
+const EVENTS=[
+  {hour:2,  id:'coffee',   text:'Хочешь кофе?',       choices:[
+    {label:'☕ Выпить',  danger:true,  effect:()=>{energy=Math.min(100,energy+20);sleepDebt+=8;message='Кофе в руку! Но ночью не заснёшь раньше...';}},
+    {label:'💧 Вода',   good:true,   effect:()=>{energy=Math.min(100,energy+5);message='Вода — мудрое решение!';}},
+  ]},
+  {hour:4,  id:'phone',    text:'Тянет залипнуть в телефон...',choices:[
+    {label:'📱 Полистать', danger:true, effect:()=>{sleepDebt+=10;sleepHour=Math.min(6,sleepHour+0.5);message='Час пролетел незаметно. Всё позже...';}},
+    {label:'📵 Отложить',  good:true,  effect:()=>{mood=Math.min(100,mood+10);message='Молодец! Мозг скажет спасибо.';}},
+  ]},
+  {hour:6,  id:'sport',    text:'Потренироваться?', choices:[
+    {label:'🏃 Пробежка', good:true,  effect:()=>{energy=Math.min(100,energy+15);mood=Math.min(100,mood+15);sleepDebt=Math.max(0,sleepDebt-5);message='Кровь разогнал! Сегодня устанешь вовремя.';}},
+    {label:'🛋️ Полежать', danger:true, effect:()=>{sleepDebt+=5;message='Ладно, завтра...';}},
+  ]},
+  {hour:8,  id:'nap',      text:'Клонит в дрёму после обеда...', choices:[
+    {label:'😴 Вздремнуть 20 мин', effect:()=>{energy=Math.min(100,energy+10);sleepDebt=Math.max(0,sleepDebt-5);message='Короткий сон освежил!';}},
+    {label:'⏰ Не спать',  good:true, effect:()=>{sleepDebt=Math.max(0,sleepDebt+5);mood=Math.max(0,mood-5);message='Тяжело, но вечером сильнее захочется спать.';}},
+  ]},
+  {hour:10, id:'screen',   text:'Перед сном экран...', choices:[
+    {label:'📺 Сериал ещё серию', danger:true, effect:()=>{sleepHour=Math.min(6,sleepHour+0.5);message='"Одну серию" стало двумя часами.';}},
+    {label:'📖 Книга или тишина', good:true,  effect:()=>{sleepHour=Math.max(TARGET_SLEEP,sleepHour-0.5);mood=Math.min(100,mood+10);message='Мозг успокаивается. Хороший знак!';}},
+  ]},
+];
+
+// Generate choices for current day
+function getDayEvents(){
+  // hours relative to wakeHour
+  return EVENTS.map(e=>({...e, absHour:(wakeHour+e.hour)%24}));
+}
+
+let dayEvents=[];
+let triggeredEvents=new Set();
+
+function startDay(){
+  curHour=wakeHour;
+  animHour=wakeHour;
+  dayPhase='awake';
+  dayEvents=getDayEvents();
+  triggeredEvents=new Set();
+  pendingChoices=[];
+  energy=Math.max(20,Math.min(100,100-sleepDebt*0.5));
+  mood=Math.max(20,Math.min(100,mood));
+  message=`День ${day}/${MAX_DAYS}. Просыпаешься в ${fmt(wakeHour)}. Спать хочется в ${fmt(sleepHour)}.`;
+  renderUI();
+}
+
+function fmt(h){
+  const hh=Math.floor(((h%24)+24)%24);
+  return hh.toString().padStart(2,'0')+':00';
+}
+
+function hoursBetween(from,to){
+  return ((to-from+24)%24);
+}
+
+// How many hours til target sleep from current
+function hoursAwake(){
+  return hoursBetween(wakeHour,sleepHour);
+}
+
+// Progress through waking hours (0-1)
+function dayProgress(){
+  const total=hoursAwake();
+  const elapsed=hoursBetween(wakeHour,curHour);
+  return Math.min(1,elapsed/total);
+}
+
+function canSleep(){
+  // Can try to sleep when within 2h of sleepHour
+  const diff=hoursBetween(curHour,sleepHour);
+  return diff<=2||dayProgress()>.85;
+}
+
+function trySleep(){
+  const diff=hoursBetween(curHour,sleepHour);
+  if(diff>3){
+    // Too early
+    message='Ещё рано — не заснёшь. Подожди...';
+    sleepDebt+=3;
+  }else{
+    // Sleep!
+    goToSleep();
+  }
+  renderUI();
+}
+
+function goToSleep(){
+  dayPhase='asleep';
+  // Shift sleep earlier gradually
+  const shift=sleepDebt>50?0:0.5;
+  sleepHour=Math.max(TARGET_SLEEP-1,sleepHour-shift);
+  wakeHour=sleepHour+8; // 8h sleep
+  if(wakeHour>=24)wakeHour-=24;
+  sleepDebt=Math.max(0,sleepDebt-20);
+  message='Засыпаешь... 💤';
+  pendingChoices=[];
+  setTimeout(()=>nextDay(),1800);
+  renderUI();
+}
+
+function nextDay(){
+  day++;
+  if(day>MAX_DAYS){
+    // Check win condition
+    const sleepOk=Math.abs(((sleepHour-TARGET_SLEEP+24)%24))<2;
+    const wakeOk=Math.abs(((wakeHour-TARGET_WAKE+24)%24))<2;
+    if(sleepOk&&wakeOk){gameWon=true;}else{gameOver=true;}
+    renderUI();
+    return;
+  }
+  startDay();
+}
+
+function advanceTime(hours){
+  curHour=(curHour+hours)%24;
+  // Check events
+  for(const ev of dayEvents){
+    const eHour=(wakeHour+EVENTS.find(e=>e.id===ev.id).hour)%24;
+    if(!triggeredEvents.has(ev.id)&&Math.abs(hoursBetween(wakeHour,curHour)-EVENTS.find(e=>e.id===ev.id).hour)<.1){
+      triggeredEvents.add(ev.id);
+      pendingChoices=ev.choices;
+      message=ev.text;
+      renderUI();
+      return;
+    }
+  }
+  renderUI();
+}
+
+function makeChoice(ch){
+  ch.effect();
+  pendingChoices=[];
+  renderUI();
+}
+
+function renderUI(){
+  const info=document.getElementById('info');
+  const btns=document.getElementById('btns');
+  info.textContent=message;
+  btns.innerHTML='';
+
+  if(gameOver||gameWon){
+    const b=document.createElement('button');
+    b.className='btn sleep';b.textContent='🔄 Снова';
+    b.onclick=()=>init();btns.appendChild(b);
+    return;
+  }
+  if(dayPhase==='asleep')return;
+
+  if(pendingChoices.length>0){
+    for(const ch of pendingChoices){
+      const b=document.createElement('button');
+      b.className='btn'+(ch.danger?' danger':ch.good?' good':'');
+      b.textContent=ch.label;
+      b.onclick=()=>makeChoice(ch);
+      btns.appendChild(b);
+    }
+    return;
+  }
+
+  // Time advance buttons
+  const b1=document.createElement('button');
+  b1.className='btn';b1.textContent='⏩ +1 час';
+  b1.onclick=()=>{advanceTime(1);energy=Math.max(0,energy-5);};
+  btns.appendChild(b1);
+
+  const b2=document.createElement('button');
+  b2.className='btn';b2.textContent='⏩⏩ +2 часа';
+  b2.onclick=()=>{advanceTime(2);energy=Math.max(0,energy-10);};
+  btns.appendChild(b2);
+
+  if(canSleep()){
+    const bs=document.createElement('button');
+    bs.className='btn sleep';bs.textContent='😴 СПАТЬ';
+    bs.onclick=()=>trySleep();
+    btns.appendChild(bs);
+  }
+}
+
+// ── DRAWING ────────────────────────────────────
+function skyColor(hour){
+  const h=((hour%24)+24)%24;
+  if(h>=6&&h<8) return['#ff9060','#ffcc80'];   // sunrise
+  if(h>=8&&h<17) return['#4a90d9','#87ceeb'];   // day
+  if(h>=17&&h<20) return['#ff6030','#ff9060'];  // sunset
+  if(h>=20&&h<22) return['#1a1560','#3a2080'];  // dusk
+  return['#050010','#0a0030'];                   // night
+}
+
+function drawScene(hour){
+  const h=((hour%24)+24)%24;
+  const [top,bot]=skyColor(h);
+  const bg=c.createLinearGradient(0,0,0,H*.7);
+  bg.addColorStop(0,top);bg.addColorStop(1,bot);
+  c.fillStyle=bg;c.fillRect(0,0,W,H);
+
+  // Stars (night)
+  const starAlpha=h>=21||h<6?1:h>=20?h-20:h<7?1-(h-6):0;
+  if(starAlpha>0){
+    c.globalAlpha=starAlpha*.8;
+    for(let i=0;i<50;i++){
+      const sx=((i*137+day*31)%W);
+      const sy=((i*97+day*17)%(H*.5));
+      const br=.5+.5*Math.sin(frame*.04+i);
+      c.fillStyle=`rgba(255,255,220,${br})`;
+      c.beginPath();c.arc(sx,sy,1+i%2,0,Math.PI*2);c.fill();
+    }
+    // Moon
+    if(h>=21||h<5){
+      const mx=W*.75,my=H*.15;
+      c.fillStyle='rgba(255,255,200,.9)';c.beginPath();c.arc(mx,my,20,0,Math.PI*2);c.fill();
+      c.fillStyle=top;c.beginPath();c.arc(mx+8,my-3,17,0,Math.PI*2);c.fill();
+    }
+    c.globalAlpha=1;
+  }
+
+  // Sun
+  if(h>=5&&h<21){
+    const sunProg=(h-5)/16;
+    const sx=sunProg*W;
+    const sy=H*.3-Math.sin(sunProg*Math.PI)*H*.25;
+    const sunR=h>=7&&h<18?22:16;
+    c.fillStyle=h<8||h>17?'#ffaa30':'#ffe860';
+    c.beginPath();c.arc(sx,sy,sunR,0,Math.PI*2);c.fill();
+    if(h>=8&&h<17){
+      c.strokeStyle='rgba(255,230,80,.3)';c.lineWidth=3;
+      for(let i=0;i<8;i++){
+        const a=i/8*Math.PI*2;
+        c.beginPath();c.moveTo(sx+Math.cos(a)*(sunR+5),sy+Math.sin(a)*(sunR+5));
+        c.lineTo(sx+Math.cos(a)*(sunR+12),sy+Math.sin(a)*(sunR+12));c.stroke();
+      }
+    }
+  }
+
+  // Buildings silhouette
+  const bldAlpha=h>=19||h<7?.9:.3;
+  c.globalAlpha=bldAlpha;
+  c.fillStyle=h>=20||h<6?'#050015':'#1a2040';
+  const buildings=[[0,H*.6,60,H*.35],[55,H*.65,45,H*.28],[95,H*.55,70,H*.4],[160,H*.68,40,H*.25],[195,H*.58,55,H*.38],[245,H*.62,80,H*.33],[320,H*.55,65,H*.42],[380,H*.65,50,H*.3]];
+  for(const[bx,by,bw,bh]of buildings){c.fillRect(bx,by,bw,bh);}
+  // Windows
+  if(h>=19||h<6){
+    c.fillStyle='rgba(255,220,100,.6)';
+    buildings.forEach(([bx,by,bw,bh])=>{
+      for(let wy=by+8;wy<by+bh-8;wy+=12)
+        for(let wx=bx+6;wx<bx+bw-6;wx+=10)
+          if(Math.sin(wx*7+wy*3+day)>.2)c.fillRect(wx,wy,6,8);
+    });
+  }
+  c.globalAlpha=1;
+
+  // Ground
+  const gr=c.createLinearGradient(0,H*.78,0,H);
+  gr.addColorStop(0,h>=19||h<6?'#0a1a0a':'#1a4a1a');
+  gr.addColorStop(1,h>=19||h<6?'#050a05':'#0a2a0a');
+  c.fillStyle=gr;c.fillRect(0,H*.78,W,H*.22);
+
+  // Room (interior overlay at night)
+  if(h>=22||h<8){
+    const roomAlpha=h>=23||h<6?0.25:h>=22?0.1:0.08;
+    c.fillStyle=`rgba(20,10,40,${roomAlpha})`;c.fillRect(0,0,W,H);
+    // Desk lamp glow
+    if(h>=22||h<7){
+      const gl=c.createRadialGradient(W*.3,H*.5,0,W*.3,H*.5,120);
+      gl.addColorStop(0,'rgba(255,200,80,.15)');gl.addColorStop(1,'rgba(0,0,0,0)');
+      c.fillStyle=gl;c.fillRect(0,0,W,H);
+    }
+  }
+
+  // Draw person (in room)
+  drawPerson(h);
+
+  // Clock display
+  drawClock(h);
+
+  // Stats bars
+  drawStats();
+
+  // Progress bar (day)
+  const prog=dayProgress();
+  c.fillStyle='rgba(0,0,0,.4)';c.fillRect(10,H-30,W-20,8);
+  c.fillStyle=prog>.8?'#ff6060':'#60b0ff';
+  c.fillRect(10,H-30,(W-20)*prog,8);
+  c.fillStyle='#888';c.font='10px sans-serif';c.textAlign='left';
+  c.fillText(fmt(wakeHour),10,H-34);
+  c.textAlign='right';c.fillText(fmt(sleepHour),W-10,H-34);
+  c.textAlign='center';c.fillText(fmt(h),W/2,H-34);
+  c.textAlign='left';
+
+  if(dayPhase==='asleep'){
+    c.fillStyle='rgba(10,0,30,.7)';c.fillRect(0,0,W,H);
+    c.fillStyle='#c8b0ff';c.font='bold 28px Georgia';c.textAlign='center';
+    c.fillText('💤 Zzz...',W/2,H*.4);
+    c.font='14px Georgia';c.fillStyle='#8080c0';
+    c.fillText('Смещаем режим...',W/2,H*.5);
+    c.textAlign='left';
+  }
+
+  if(gameWon||gameOver){
+    c.fillStyle='rgba(0,0,0,.75)';c.fillRect(0,0,W,H);
+    c.textAlign='center';
+    if(gameWon){
+      c.fillStyle='#ffd700';c.font='bold 26px Georgia';c.fillText('🌙 Режим восстановлен!',W/2,H*.35);
+      c.fillStyle='#c8d8ff';c.font='14px Georgia';
+      c.fillText(`Сон в ${fmt(sleepHour)}, подъём в ${fmt(wakeHour)}`,W/2,H*.45);
+      c.fillText('Молодец, ты справился за '+MAX_DAYS+' дней!',W/2,H*.52);
+    }else{
+      c.fillStyle='#ff8080';c.font='bold 22px Georgia';c.fillText('😵 Режим не восстановлен',W/2,H*.35);
+      c.fillStyle='#c8d8ff';c.font='13px Georgia';
+      c.fillText(`Сон в ${fmt(sleepHour)}, цель — ${fmt(TARGET_SLEEP)}`,W/2,H*.45);
+      c.fillText('Попробуй ещё раз!',W/2,H*.52);
+    }
+    c.textAlign='left';
+  }
+}
+
+function drawPerson(h){
+  const px=W*.35,py=H*.62;
+  const asleep=dayPhase==='asleep'||(h>=1&&h<6);
+
+  if(asleep){
+    // In bed
+    c.fillStyle='#3a2060';c.fillRect(px-30,py,90,25);// bed
+    c.fillStyle='#6040a0';c.fillRect(px-30,py,25,30);// pillow
+    c.fillStyle='#c8956a';c.beginPath();c.arc(px-15,py+8,12,0,Math.PI*2);c.fill();// head
+    c.fillStyle='#4a3080';c.fillRect(px,py+2,55,22);// blanket
+    // Zzz
+    c.fillStyle='rgba(180,160,255,.8)';c.font='bold 14px sans-serif';
+    c.fillText('z',px+60,py-5);c.font='bold 10px sans-serif';c.fillText('z',px+70,py-15);
+    return;
+  }
+
+  // Standing / sitting
+  const tired=energy<40;
+  const bob=Math.sin(frame*.04)*2;
+
+  // Body
+  c.fillStyle='#4060a0';c.fillRect(px-8,py-30+bob,16,24);
+  // Legs
+  c.fillStyle='#203060';
+  const walk=Math.sin(frame*.05)*5;
+  c.fillRect(px-7,py-6+bob,6,20+walk);c.fillRect(px+1,py-6+bob,6,20-walk);
+  // Head
+  c.beginPath();c.arc(px,py-40+bob,12,0,Math.PI*2);c.fillStyle='#c8956a';c.fill();
+  // Eyes (tired = droopy)
+  c.fillStyle='#333';
+  if(tired){
+    c.fillRect(px-5,py-42+bob,5,2);c.fillRect(px+1,py-42+bob,5,2);
+  }else{
+    c.beginPath();c.arc(px-3,py-42+bob,2,0,Math.PI*2);c.fill();
+    c.beginPath();c.arc(px+3,py-42+bob,2,0,Math.PI*2);c.fill();
+  }
+  // Phone in hand (if night)
+  if(h>=20){
+    c.fillStyle='#111';c.fillRect(px+10,py-20+bob,8,13);
+    c.fillStyle='rgba(150,200,255,.4)';c.fillRect(px+11,py-19+bob,6,11);
+  }
+  // Coffee mug (if morning)
+  if(h>=wakeHour&&h<wakeHour+3){
+    c.fillStyle='#8B4513';c.fillRect(px-18,py-18+bob,10,12);
+    c.strokeStyle='#8B4513';c.lineWidth=2;c.beginPath();c.arc(px-8,py-13+bob,4,-.3,1.5);c.stroke();
+    c.fillStyle='rgba(200,160,100,.5)';c.beginPath();c.arc(px-12,py-7+bob,2,0,Math.PI*2);c.fill();
+  }
+}
+
+function drawClock(h){
+  const cx=W*.78,cy=50,r=32;
+  // Clock face
+  c.fillStyle='rgba(0,0,0,.5)';c.beginPath();c.arc(cx,cy,r+2,0,Math.PI*2);c.fill();
+  c.fillStyle='#eee8ff';c.beginPath();c.arc(cx,cy,r,0,Math.PI*2);c.fill();
+  // Hour markers
+  for(let i=0;i<12;i++){
+    const a=i/12*Math.PI*2-Math.PI/2;
+    c.fillStyle='#554';c.beginPath();c.arc(cx+Math.cos(a)*(r-5),cy+Math.sin(a)*(r-5),i%3===0?2.5:1.5,0,Math.PI*2);c.fill();
+  }
+  // Target zone (green arc)
+  const ta=(TARGET_SLEEP/12*Math.PI)-Math.PI/2;
+  const tb=(TARGET_WAKE/12*Math.PI)-Math.PI/2;
+  c.strokeStyle='rgba(0,200,100,.4)';c.lineWidth=5;
+  c.beginPath();c.arc(cx,cy,r-4,ta,tb+Math.PI*2);c.stroke();
+  // Hour hand
+  const ha=(h%12)/12*Math.PI*2-Math.PI/2;
+  c.strokeStyle='#222';c.lineWidth=3;
+  c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+Math.cos(ha)*(r*.6),cy+Math.sin(ha)*(r*.6));c.stroke();
+  // Min hand
+  const ma=(h%1)*Math.PI*2-Math.PI/2;
+  c.strokeStyle='#444';c.lineWidth=2;
+  c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+Math.cos(ma)*(r*.8),cy+Math.sin(ma)*(r*.8));c.stroke();
+  c.fillStyle='#333';c.beginPath();c.arc(cx,cy,3,0,Math.PI*2);c.fill();
+  // Day label
+  c.fillStyle='#8080a0';c.font='10px sans-serif';c.textAlign='center';
+  c.fillText('День '+day+'/'+MAX_DAYS,cx,cy+r+12);c.textAlign='left';
+}
+
+function drawStats(){
+  const bars=[
+    {label:'⚡',val:energy,col:'#60d060',x:10},
+    {label:'💤',val:sleepDebt,col:'#8060ff',x:60,invert:true},
+    {label:'😊',val:mood,col:'#ffd060',x:110},
+  ];
+  for(const b of bars){
+    const bx=b.x,by=H*.1;
+    c.fillStyle='rgba(0,0,0,.4)';c.fillRect(bx,by,35,6);
+    const fill=b.invert?(100-b.val)/100:b.val/100;
+    c.fillStyle=b.col;c.fillRect(bx,by,35*Math.max(0,Math.min(1,fill)),6);
+    c.fillStyle='#ccc';c.font='12px sans-serif';c.fillText(b.label,bx,by-2);
+  }
+}
+
+function loop(){
+  frame++;
+  // Animate hour
+  animHour+=(curHour-animHour)*.05;
+  c.clearRect(0,0,W,H);
+  drawScene(animHour);
+  requestAnimationFrame(loop);
+}
+
+function init(){
+  day=1;sleepHour=4;wakeHour=13;energy=60;sleepDebt=40;mood=50;
+  gameOver=false;gameWon=false;
+  startDay();
+}
+
+init();
+loop();
+</script>
+</body>
+</html>
