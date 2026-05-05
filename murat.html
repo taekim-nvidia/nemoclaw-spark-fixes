@@ -42,6 +42,10 @@ function beep(freq,dur,type='sine',vol=.3){
   }catch(e){}
 }
 
+// Real songs
+const SONGS=['Ben Sana Aşık Oldum','Tek Suçum Seni Sevmekmiş','Ayyüzlüm','Yaralı','Sevgiliye','Bahar','Aşıklar Yolu','Kara Gözlüm','Aşkın Gözyaşları','Merhaba'];
+let songMsg='',songMsgT=0,songsFound=[];
+
 // Game state
 const GR=0.6;
 const GROUND=H-130;
@@ -235,6 +239,9 @@ function update(){
     if(!notes[i].collected&&collides(M.x,M.y,M.w,M.h,notes[i].x-notes[i].r,notes[i].y-notes[i].r,notes[i].r*2,notes[i].r*2)){
       notes[i].collected=true;score+=10;
       beep(523,.1,'sine',.2);beep(659,.1,'sine',.15);
+      const song=SONGS[Math.floor(Math.random()*SONGS.length)];
+      songMsg='♪ '+song;songMsgT=90;
+      if(!songsFound.includes(song))songsFound.push(song);
     }
   }
   // Remove collected notes
@@ -331,6 +338,14 @@ function drawHUD(){
   c.fillStyle='#aaa';c.fillText('Рекорд: '+hiScore,W-10,22);
   c.textAlign='left';
 
+  // Song popup
+  if(songMsgT>0){
+    const al=Math.min(1,songMsgT/20);
+    c.globalAlpha=al;c.font='bold 13px Georgia';c.textAlign='center';
+    c.fillStyle='#ffd700';c.strokeStyle='#000';c.lineWidth=2;
+    c.strokeText(songMsg,W/2,H*.35);c.fillText(songMsg,W/2,H*.35);
+    c.globalAlpha=1;songMsgT--;
+  }
   // Speed indicator
   const spd=Math.round((speed-4)*100/4);
   c.fillStyle='rgba(255,80,120,.6)';c.fillRect(0,34,W*(spd/100),3);
@@ -345,10 +360,11 @@ function drawStart(){
   c.fillText('МУРАТ ГЁГЕБАКАН',W/2,H*.35);
   c.shadowBlur=0;
   c.fillStyle='#ff8cb0';c.font='16px Georgia';
-  c.fillText('Певец · 1965–2010',W/2,H*.4);
+  c.fillText('Анатолийский рок · 1968–2014',W/2,H*.4);
   c.fillStyle='#c8c8ff';c.font='13px Georgia';
-  c.fillText('Собирай ноты ♪',W/2,H*.48);
-  c.fillText('Прыгай через препятствия',W/2,H*.54);
+  c.fillText('Собирай ноты ♪ | Прыгай через барьеры',W/2,H*.48);
+  c.fillStyle='rgba(200,200,255,.6)';c.font='11px Georgia';
+  c.fillText('Адана → Анкара → Стамбул | Лейкемия',W/2,H*.54);
   c.fillStyle='rgba(255,220,50,.8+.2*Math.sin(fr*.1))';
   c.font='bold 15px Georgia';
   c.fillText('Нажми ПРЫЖОК чтобы начать',W/2,H*.62);
@@ -370,6 +386,10 @@ function drawDead(){
   c.fillStyle='#ffd700';c.font='bold 16px Georgia';
   c.fillText('Очки: '+score,W/2,H*.5);
   if(score>=hiScore&&score>0){c.fillStyle='#ff8c00';c.fillText('🏆 Новый рекорд!',W/2,H*.56);}
+  if(songsFound.length>0){
+    c.fillStyle='rgba(200,200,255,.7)';c.font='10px Georgia';
+    c.fillText('Нашёл: '+songsFound.slice(-2).join(', '),W/2,H*.7);
+  }
   c.fillStyle='#c8c8ff';c.font='13px Georgia';
   c.fillText('Нажми ПРЫЖОК снова',W/2,H*.63);
   c.textAlign='left';
