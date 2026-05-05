@@ -81,7 +81,7 @@ body{background:#000;display:flex;align-items:center;justify-content:flex-start;
 <div id="cutscene" onclick="advanceCutscene()" style="cursor:pointer;">
   <div id="cs-year"></div>
   <div id="cs-text"></div>
-  <div id="cs-tap">Нажми чтобы продолжить</div>
+  <button id="cs-btn" style="margin-top:24px;padding:14px 40px;background:rgba(255,200,0,.9);border:none;border-radius:12px;color:#000;font-size:16px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;">▶ ДАЛЬШЕ</button>
 </div>
 </div>
 
@@ -716,6 +716,8 @@ function loop(){
 
 // Touch on cutscene div
 document.getElementById('cutscene').addEventListener('touchstart',e=>{e.preventDefault();advanceCutscene();},{passive:false});
+document.getElementById('cs-btn').addEventListener('touchstart',e=>{e.stopPropagation();e.preventDefault();advanceCutscene();},{passive:false});
+document.getElementById('cs-btn').addEventListener('click',e=>{e.stopPropagation();advanceCutscene();});
 
 // ═══════════ START ═══════════
 showCutscene(0);
