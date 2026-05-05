@@ -174,17 +174,59 @@ function drawMurat(x,y,step){
 
 function drawObs(o){
   if(o.type==='cone'){
-    // Traffic cone / stage barrier
-    c.fillStyle='#ff4400';
-    c.beginPath();c.moveTo(o.x+o.w/2,o.y);c.lineTo(o.x+o.w,o.y+o.h);c.lineTo(o.x,o.y+o.h);c.closePath();c.fill();
-    c.fillStyle='#fff';c.fillRect(o.x+4,o.y+o.h*.5,o.w-8,6);
+    // Security guard
+    const gx=o.x+o.w/2,gy=o.y;
+    // Shadow
+    c.beginPath();c.ellipse(gx+2,o.y+o.h+4,10,4,0,0,Math.PI*2);c.fillStyle='rgba(0,0,0,.3)';c.fill();
+    // Legs
+    c.fillStyle='#111';c.fillRect(gx-7,gy+o.h*.6,8,o.h*.4);c.fillRect(gx+1,gy+o.h*.6,8,o.h*.4);
+    // Shoes
+    c.fillStyle='#000';c.fillRect(gx-9,gy+o.h-.5,12,6);c.fillRect(gx-.5,gy+o.h-.5,12,6);
+    // Body (black suit)
+    c.fillStyle='#1a1a1a';c.fillRect(gx-10,gy+o.h*.28,20,o.h*.36);
+    // White shirt
+    c.fillStyle='#eee';c.fillRect(gx-3,gy+o.h*.28,6,o.h*.2);
+    // Tie
+    c.fillStyle='#cc0000';c.beginPath();c.moveTo(gx-2,gy+o.h*.29);c.lineTo(gx+2,gy+o.h*.29);c.lineTo(gx+1,gy+o.h*.44);c.lineTo(gx-1,gy+o.h*.44);c.fill();
+    // Arms crossed
+    c.fillStyle='#1a1a1a';
+    c.fillRect(gx-14,gy+o.h*.35,10,8);c.fillRect(gx+4,gy+o.h*.35,10,8);
+    // Head
+    c.beginPath();c.arc(gx,gy+o.h*.16,o.w*.28,0,Math.PI*2);c.fillStyle='#c8956a';c.fill();
+    // Sunglasses
+    c.fillStyle='#111';
+    c.fillRect(gx-8,gy+o.h*.13,7,5);c.fillRect(gx+1,gy+o.h*.13,7,5);
+    c.strokeStyle='#333';c.lineWidth=1;c.beginPath();c.moveTo(gx-1,gy+o.h*.155);c.lineTo(gx+1,gy+o.h*.155);c.stroke();
+    // Earpiece
+    c.fillStyle='#fff';c.beginPath();c.arc(gx+o.w*.28,gy+o.h*.18,2,0,Math.PI*2);c.fill();
+    // Earpiece wire
+    c.strokeStyle='#fff';c.lineWidth=1;c.beginPath();c.moveTo(gx+o.w*.27,gy+o.h*.2);c.lineTo(gx+o.w*.2,gy+o.h*.35);c.stroke();
+    // Hair
+    c.fillStyle='#111';c.beginPath();c.ellipse(gx,gy+o.h*.08,o.w*.28,o.h*.09,0,Math.PI,0);c.fill();
+    // Badge
+    c.fillStyle='#ffd700';c.fillRect(gx-9,gy+o.h*.32,10,7);
+    c.fillStyle='#000';c.font='5px sans-serif';c.textAlign='center';c.fillText('SEC',gx-4,gy+o.h*.375);
   }else{
-    // Barrier
-    c.fillStyle='#cc0020';c.fillRect(o.x,o.y,o.w,o.h);
-    c.fillStyle='#ff6040';c.fillRect(o.x+2,o.y+2,o.w-4,8);
-    c.fillStyle='#cc0020';
-    for(let i=0;i<3;i++)c.fillRect(o.x+4,o.y+14+i*14,o.w-8,6);
+    // Concert barrier (metal fence)
+    const bx=o.x,by=o.y,bw=o.w,bh=o.h;
+    // Base feet
+    c.fillStyle='#555';c.fillRect(bx+2,by+bh-6,12,6);c.fillRect(bx+bw-14,by+bh-6,12,6);
+    // Vertical posts
+    c.fillStyle='#888';c.fillRect(bx+5,by,6,bh-5);c.fillRect(bx+bw-11,by,6,bh-5);
+    // Top rail
+    c.fillStyle='#aaa';c.fillRect(bx,by,bw,7);
+    // Middle rail
+    c.fillStyle='#999';c.fillRect(bx,by+bh*.45,bw,5);
+    // Vertical bars
+    c.fillStyle='#888';
+    const bars=Math.floor(bw/8);
+    for(let i=1;i<bars;i++)c.fillRect(bx+i*(bw/bars)-2,by+7,4,bh*.45-7);
+    // Metal shine
+    c.fillStyle='rgba(255,255,255,.2)';c.fillRect(bx+1,by,3,bh*.6);
+    // Feet detail
+    c.fillStyle='#444';c.fillRect(bx,by+bh-4,bw,4);
   }
+  c.textAlign='left';
 }
 
 function drawNote(n){
