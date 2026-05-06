@@ -83,10 +83,10 @@
   const toast = document.getElementById('toast');
 
   // ---------- View ----------
-  const VW = 256, VH = 240; // virtual resolution (NES-ish)
+  const VW = 256, VH = 288; // virtual resolution (matches 18-row level)
   let scale = 3;
   function fit(){
-    const maxS = Math.min(window.innerWidth/VW, (window.innerHeight-40)/VH);
+    const maxS = Math.min(window.innerWidth/VW, (window.innerHeight-80)/VH);
     scale = Math.max(2, Math.min(4.5, Math.floor(maxS*10)/10));
     cvs.width = VW*scale*devicePixelRatio;
     cvs.height = VH*scale*devicePixelRatio;
