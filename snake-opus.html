@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Opus Snake ⚡</title>
+<style>
+  :root{
+    --bg:#05060a; --grid:#0d1320; --neon:#39ffd1; --neon2:#ff3df0;
+    --gold:#ffd23f; --bad:#ff4d6d; --ui:#cdebff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{margin:0;height:100%;background:radial-gradient(ellipse at top,#0c1430 0%,var(--bg) 70%);color:var(--ui);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Inter,sans-serif;overflow:hidden;touch-action:none}
+  #wrap{position:fixed;inset:0;display:grid;place-items:center}
+  canvas{display:block;border-radius:14px;box-shadow:0 0 0 1px #1b2440 inset, 0 0 60px rgba(57,255,209,.15), 0 0 120px rgba(255,61,240,.08);background:var(--bg)}
+  #hud{position:fixed;top:14px;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;padding:0 18px;pointer-events:none;font-variant-numeric:tabular-nums}
+  .badge{background:rgba(13,19,32,.7);backdrop-filter:blur(8px);border:1px solid #1b2440;padding:8px 12px;border-radius:10px;font-size:14px;line-height:1.2}
+  .badge b{color:var(--neon);text-shadow:0 0 8px rgba(57,255,209,.6);font-weight:600}
+  .badge .gold{color:var(--gold);text-shadow:0 0 8px rgba(255,210,63,.6)}
+  .badge .bad{color:var(--bad)}
+  #combo{font-size:13px;opacity:.85;margin-top:4px}
+  #title{position:fixed;top:14px;left:50%;transform:translateX(-50%);font-weight:700;letter-spacing:.18em;font-size:13px;color:#88a3ce;pointer-events:none}
+  #title span{color:var(--neon2);text-shadow:0 0 10px rgba(255,61,240,.7)}
+  #overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(5,6,10,.78);backdrop-filter:blur(6px);z-index:5}
+  #overlay.hidden{display:none}
+  .panel{background:linear-gradient(180deg,#0d1428,#080b16);border:1px solid #1b2440;border-radius:18px;padding:28px 28px 22px;text-align:center;max-width:340px;width:88%;box-shadow:0 0 60px rgba(57,255,209,.12)}
+  .panel h1{margin:0 0 4px;font-size:24px;letter-spacing:.04em}
+  .panel h1 .acc{color:var(--neon);text-shadow:0 0 14px rgba(57,255,209,.7)}
+  .panel p{margin:8px 0 18px;color:#9bb3d6;font-size:14px;line-height:1.45}
+  .legend{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;text-align:left;font-size:13px;color:#b9cdec;margin:6px 0 18px}
+  .legend .dot{width:14px;height:14px;border-radius:50%;align-self:center;justify-self:center;box-shadow:0 0 10px currentColor}
+  button{appearance:none;border:0;cursor:pointer;font:inherit;color:#04101a;background:linear-gradient(180deg,var(--neon),#0bd1a3);padding:12px 22px;border-radius:12px;font-weight:700;letter-spacing:.04em;box-shadow:0 8px 30px rgba(57,255,209,.35);transition:transform .08s ease}
+  button:active{transform:translateY(1px)}
+  #controls{position:fixed;bottom:max(18px,env(safe-area-inset-bottom));left:0;right:0;display:none;justify-content:center;pointer-events:none}
+  .pad{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(3,56px);gap:6px;pointer-events:auto}
+  .pad button{background:rgba(13,19,32,.7);color:var(--ui);border:1px solid #1b2440;border-radius:14px;font-size:22px;box-shadow:none;font-weight:500;padding:0}
+  .pad .u{grid-column:2;grid-row:1}
+  .pad .l{grid-column:1;grid-row:2}
+  .pad .r{grid-column:3;grid-row:2}
+  .pad .d{grid-column:2;grid-row:3}
+  @media (pointer:coarse){#controls{display:flex}}
+  .stat{display:flex;justify-content:space-between;color:#9bb3d6;font-size:14px;padding:4px 0;border-bottom:1px dashed #1b2440}
+  .stat:last-child{border:0}
+  .stat b{color:var(--ui)}
+  #pause{position:fixed;top:14px;left:50%;transform:translateX(-50%);margin-top:34px;font-size:13px;color:#88a3ce;pointer-events:none;opacity:0;transition:opacity .2s}
+  #pause.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+
+<div id="title">OPUS&nbsp;<span>SNAKE</span>&nbsp;⚡</div>
+
+<div id="hud">
+  <div class="badge">
+    score <b id="score">0</b>
+    <div id="combo"></div>
+  </div>
+  <div class="badge" style="text-align:right">
+    best <b id="best">0</b><br>
+    <span style="color:#88a3ce">len</span> <b id="len">3</b>
+  </div>
+</div>
+<div id="pause">PAUSED — press space</div>
+
+<div id="controls">
+  <div class="pad">
+    <button class="u" data-d="up">▲</button>
+    <button class="l" data-d="left">◀</button>
+    <button class="r" data-d="right">▶</button>
+    <button class="d" data-d="down">▼</button>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="panel">
+    <h1>OPUS <span class="acc">SNAKE</span></h1>
+    <p id="subtitle">Собирай фрукты, копи комбо, не врежься. На стенках — портал на другую сторону.</p>
+    <div class="legend">
+      <span class="dot" style="color:#39ffd1;background:#39ffd1"></span><span>Обычный — +1 очко</span>
+      <span class="dot" style="color:#ffd23f;background:#ffd23f"></span><span>Золотой — +5, ускоряет</span>
+      <span class="dot" style="color:#ff3df0;background:#ff3df0"></span><span>Призма — slow-mo на 3 сек</span>
+      <span class="dot" style="color:#ff4d6d;background:#ff4d6d"></span><span>Бомба — взорвёт хвост</span>
+    </div>
+    <div id="finalStats" style="margin:12px 0 18px"></div>
+    <button id="play">Играть</button>
+    <p style="margin-top:14px;font-size:12px;color:#5e7aa5">⌨ стрелки / WASD · Space — пауза</p>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cvs = document.getElementById('c');
+  const ctx = cvs.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const bestEl  = document.getElementById('best');
+  const lenEl   = document.getElementById('len');
+  const comboEl = document.getElementById('combo');
+  const overlay = document.getElementById('overlay');
+  const playBtn = document.getElementById('play');
+  const subtitle= document.getElementById('subtitle');
+  const finalStats = document.getElementById('finalStats');
+  const pauseEl = document.getElementById('pause');
+
+  // ----- Grid sizing (responsive, square cells) -----
+  const COLS = 24, ROWS = 28;
+  let CELL = 22;
+  let W = COLS*CELL, H = ROWS*CELL;
+
+  function fit() {
+    const pad = 24;
+    const maxW = window.innerWidth  - pad*2;
+    const maxH = window.innerHeight - pad*2 - 60; // hud
+    const cw = Math.floor(maxW / COLS);
+    const ch = Math.floor(maxH / ROWS);
+    CELL = Math.max(10, Math.min(cw, ch, 28));
+    W = COLS*CELL; H = ROWS*CELL;
+    cvs.width = W * devicePixelRatio;
+    cvs.height = H * devicePixelRatio;
+    cvs.style.width = W+'px'; cvs.style.height = H+'px';
+    ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  // ----- State -----
+  const DIRS = {up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}};
+  let snake, dir, nextDir, food, particles, shake, score, best, alive, paused;
+  let stepInterval, stepTimer, lastFrame;
+  let comboCount, comboTimer, slowMoTimer, eaten;
+  let runStart;
+
+  best = +localStorage.getItem('opus-snake-best') || 0;
+  bestEl.textContent = best;
+
+  function reset(){
+    snake = [{x:12,y:14},{x:11,y:14},{x:10,y:14}];
+    dir = DIRS.right; nextDir = dir;
+    particles = []; shake = 0;
+    score = 0; comboCount = 0; comboTimer = 0;
+    slowMoTimer = 0; eaten = 0;
+    stepInterval = 110; stepTimer = 0;
+    alive = true; paused = false;
+    food = [];
+    spawnFood('normal'); maybeSpawnSpecial();
+    runStart = performance.now();
+    updateHUD();
+  }
+
+  function rndCell(){
+    while(true){
+      const x = Math.floor(Math.random()*COLS);
+      const y = Math.floor(Math.random()*ROWS);
+      if(snake.some(s=>s.x===x&&s.y===y)) continue;
+      if(food.some(f=>f.x===x&&f.y===y)) continue;
+      return {x,y};
+    }
+  }
+  function spawnFood(kind){
+    const c = rndCell();
+    food.push({...c, kind, born: performance.now(), life: kind==='normal'?Infinity:9000});
+  }
+  function maybeSpawnSpecial(){
+    // Each ~15s try spawn one special if none
+    const specials = food.filter(f=>f.kind!=='normal');
+    if (specials.length>0) return;
+    const r = Math.random();
+    if (r<0.35) spawnFood('gold');
+    else if (r<0.65) spawnFood('prism');
+    else if (r<0.85) spawnFood('bomb');
+  }
+
+  // ----- Input -----
+  function setDir(name){
+    if(!alive) return;
+    const nd = DIRS[name]; if(!nd) return;
+    if (nd.x === -dir.x && nd.y === -dir.y) return; // no reverse
+    nextDir = nd;
+  }
+  window.addEventListener('keydown', e=>{
+    const k = e.key.toLowerCase();
+    if (k===' '||e.code==='Space'){ togglePause(); e.preventDefault(); return; }
+    if (k==='arrowup'||k==='w') setDir('up');
+    else if (k==='arrowdown'||k==='s') setDir('down');
+    else if (k==='arrowleft'||k==='a') setDir('left');
+    else if (k==='arrowright'||k==='d') setDir('right');
+  });
+  document.querySelectorAll('.pad button').forEach(b=>{
+    b.addEventListener('click',()=>setDir(b.dataset.d));
+  });
+  // Swipe
+  let touchStart=null;
+  cvs.addEventListener('touchstart', e=>{ touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}; },{passive:true});
+  cvs.addEventListener('touchend', e=>{
+    if(!touchStart) return;
+    const t=e.changedTouches[0];
+    const dx=t.clientX-touchStart.x, dy=t.clientY-touchStart.y;
+    if (Math.abs(dx)<20&&Math.abs(dy)<20) return;
+    if (Math.abs(dx)>Math.abs(dy)) setDir(dx>0?'right':'left');
+    else setDir(dy>0?'down':'up');
+    touchStart=null;
+  });
+
+  function togglePause(){
+    if(!alive) return;
+    paused = !paused;
+    pauseEl.classList.toggle('show', paused);
+  }
+
+  // ----- Step -----
+  function step(){
+    dir = nextDir;
+    const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+    // wrap (portal)
+    if (head.x<0) head.x = COLS-1;
+    if (head.x>=COLS) head.x = 0;
+    if (head.y<0) head.y = ROWS-1;
+    if (head.y>=ROWS) head.y = 0;
+    // self collision
+    if (snake.some(s=>s.x===head.x&&s.y===head.y)){ die(); return; }
+
+    snake.unshift(head);
+    // eat?
+    let ate = false, removeIdx = -1;
+    for (let i=0;i<food.length;i++){
+      const f = food[i];
+      if (f.x===head.x&&f.y===head.y){ ate=true; removeIdx=i; eatFood(f); break; }
+    }
+    if (!ate) snake.pop();
+
+    if (removeIdx>=0) food.splice(removeIdx,1);
+
+    // expire specials
+    const now = performance.now();
+    food = food.filter(f=> f.kind==='normal' || (now - f.born) < f.life);
+    // ensure normal exists
+    if (!food.some(f=>f.kind==='normal')) spawnFood('normal');
+    // sometimes inject specials
+    if (eaten>0 && eaten%4===0 && !food.some(f=>f.kind!=='normal')) maybeSpawnSpecial();
+
+    updateHUD();
+  }
+
+  function eatFood(f){
+    eaten++;
+    const now = performance.now();
+    if (now - comboTimer < 2200) comboCount++; else comboCount = 1;
+    comboTimer = now;
+    const mult = Math.min(5, comboCount);
+    let pts = 0;
+    if (f.kind==='normal'){ pts = 1*mult; burst(f.x,f.y,'#39ffd1',16); stepInterval = Math.max(55, stepInterval - 1.2); }
+    else if (f.kind==='gold'){ pts = 5*mult; burst(f.x,f.y,'#ffd23f',32); stepInterval = Math.max(55, stepInterval - 4); }
+    else if (f.kind==='prism'){ pts = 3*mult; burst(f.x,f.y,'#ff3df0',26); slowMoTimer = 3000; }
+    else if (f.kind==='bomb'){
+      pts = -3;
+      burst(f.x,f.y,'#ff4d6d',60);
+      shake = 18;
+      // chop tail
+      const cut = Math.min(snake.length-3, 4);
+      for (let i=0;i<cut;i++){
+        const t = snake.pop();
+        if (t) burst(t.x,t.y,'#ff4d6d',6);
+      }
+      comboCount = 0;
+    }
+    score = Math.max(0, score + pts);
+  }
+
+  function die(){
+    alive = false;
+    burst(snake[0].x, snake[0].y, '#ff4d6d', 80);
+    shake = 26;
+    if (score > best){ best = score; localStorage.setItem('opus-snake-best', best); }
+    setTimeout(()=>{
+      finalStats.innerHTML =
+        `<div class="stat"><span>Очки</span><b>${score}</b></div>`+
+        `<div class="stat"><span>Длина</span><b>${snake.length}</b></div>`+
+        `<div class="stat"><span>Съедено</span><b>${eaten}</b></div>`+
+        `<div class="stat"><span>Лучший</span><b>${best}</b></div>`+
+        `<div class="stat"><span>Время</span><b>${((performance.now()-runStart)/1000).toFixed(1)}s</b></div>`;
+      subtitle.textContent = "Не повезло. Ещё круг?";
+      playBtn.textContent = "Играть снова";
+      overlay.classList.remove('hidden');
+    }, 700);
+  }
+
+  function updateHUD(){
+    scoreEl.textContent = score;
+    bestEl.textContent = best;
+    lenEl.textContent = snake.length;
+    if (comboCount>1 && performance.now()-comboTimer<2200){
+      comboEl.innerHTML = `combo <b>×${Math.min(5,comboCount)}</b>`;
+    } else { comboEl.textContent=''; }
+  }
+
+  // ----- Particles -----
+  function burst(cx, cy, color, n){
+    const px = cx*CELL + CELL/2;
+    const py = cy*CELL + CELL/2;
+    for (let i=0;i<n;i++){
+      const a = Math.random()*Math.PI*2;
+      const sp = 0.5 + Math.random()*3;
+      particles.push({
+        x:px,y:py, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+        life: 600+Math.random()*500, born: performance.now(),
+        color, size: 1+Math.random()*2.4
+      });
+    }
+  }
+
+  // ----- Render -----
+  function drawGrid(t){
+    // soft animated grid
+    ctx.save();
+    ctx.fillStyle = '#070a14';
+    ctx.fillRect(0,0,W,H);
+    const pulse = 0.5 + 0.5*Math.sin(t/2200);
+    ctx.strokeStyle = `rgba(35,55,95,${0.18+pulse*0.08})`;
+    ctx.lineWidth = 1;
+    for (let x=0;x<=COLS;x++){
+      ctx.beginPath(); ctx.moveTo(x*CELL+0.5,0); ctx.lineTo(x*CELL+0.5,H); ctx.stroke();
+    }
+    for (let y=0;y<=ROWS;y++){
+      ctx.beginPath(); ctx.moveTo(0,y*CELL+0.5); ctx.lineTo(W,y*CELL+0.5); ctx.stroke();
+    }
+    // border glow
+    ctx.strokeStyle='rgba(57,255,209,.18)';
+    ctx.lineWidth=2;
+    ctx.strokeRect(1,1,W-2,H-2);
+    ctx.restore();
+  }
+
+  function drawFood(t){
+    for (const f of food){
+      const px = f.x*CELL + CELL/2;
+      const py = f.y*CELL + CELL/2;
+      const age = t - f.born;
+      const lifeFrac = f.kind==='normal'? 1 : Math.max(0,1 - age/f.life);
+      const pulse = 0.5+0.5*Math.sin(t/200 + f.x+f.y);
+      let color='#39ffd1', glow='#39ffd1';
+      if (f.kind==='gold'){ color='#ffd23f'; glow='#ffd23f'; }
+      else if (f.kind==='prism'){ color='#ff3df0'; glow='#ff3df0'; }
+      else if (f.kind==='bomb'){ color='#ff4d6d'; glow='#ff4d6d'; }
+      const r = CELL*0.35 + pulse*1.5;
+      ctx.save();
+      ctx.shadowColor = glow;
+      ctx.shadowBlur = 18 + pulse*10;
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.4 + 0.6*lifeFrac;
+      ctx.beginPath(); ctx.arc(px,py,r,0,Math.PI*2); ctx.fill();
+      // inner highlight
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.9*lifeFrac;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(px-r*0.3, py-r*0.3, r*0.25, 0, Math.PI*2); ctx.fill();
+      // bomb: little fuse
+      if (f.kind==='bomb'){
+        ctx.strokeStyle='#1a1a1a';
+        ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(px,py-r); ctx.quadraticCurveTo(px+6,py-r-6,px+8,py-r-10); ctx.stroke();
+        ctx.fillStyle='#ffd23f';
+        ctx.beginPath(); ctx.arc(px+8,py-r-10,2,0,Math.PI*2); ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawSnake(t){
+    // body with neon gradient that flows
+    for (let i=snake.length-1;i>=0;i--){
+      const s = snake[i];
+      const px = s.x*CELL + CELL/2;
+      const py = s.y*CELL + CELL/2;
+      const k = i / Math.max(1,snake.length-1); // 0 head .. 1 tail
+      const hue = 165 - k*30; // green -> teal -> blue
+      const sat = 90 - k*20;
+      const lig = 60 - k*20;
+      ctx.save();
+      ctx.shadowColor = `hsl(${hue} ${sat}% ${lig}%)`;
+      ctx.shadowBlur = i===0 ? 22 : 10*(1-k);
+      ctx.fillStyle = `hsl(${hue} ${sat}% ${lig}%)`;
+      const r = (CELL*0.42) * (1 - k*0.25);
+      roundRect(ctx, px-r, py-r, r*2, r*2, r*0.5);
+      ctx.fill();
+      ctx.restore();
+    }
+    // eyes
+    const head = snake[0];
+    const hx = head.x*CELL + CELL/2;
+    const hy = head.y*CELL + CELL/2;
+    const ex = dir.x*CELL*0.18;
+    const ey = dir.y*CELL*0.18;
+    const ox = -dir.y*CELL*0.18;
+    const oy =  dir.x*CELL*0.18;
+    ctx.save();
+    ctx.fillStyle='#04101a';
+    ctx.beginPath(); ctx.arc(hx+ex+ox, hy+ey+oy, CELL*0.09,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(hx+ex-ox, hy+ey-oy, CELL*0.09,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#39ffd1';
+    ctx.beginPath(); ctx.arc(hx+ex*1.2+ox, hy+ey*1.2+oy, CELL*0.04,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(hx+ex*1.2-ox, hy+ey*1.2-oy, CELL*0.04,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  function roundRect(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  function drawParticles(t){
+    for (const p of particles){
+      const age = t - p.born;
+      const a = 1 - age/p.life;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0,a);
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function drawSlowMo(t){
+    if (slowMoTimer<=0) return;
+    ctx.save();
+    ctx.fillStyle='rgba(255,61,240,0.06)';
+    ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  }
+
+  function tick(now){
+    if (!lastFrame) lastFrame = now;
+    const dt = Math.min(50, now - lastFrame);
+    lastFrame = now;
+
+    if (!paused && alive){
+      const speedFactor = slowMoTimer>0 ? 0.45 : 1;
+      stepTimer += dt * speedFactor;
+      if (stepTimer >= stepInterval){
+        stepTimer = 0;
+        step();
+      }
+      slowMoTimer = Math.max(0, slowMoTimer - dt);
+    }
+
+    // particles update
+    for (let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy;
+      p.vx *= 0.96; p.vy *= 0.96;
+      if (now - p.born > p.life) particles.splice(i,1);
+    }
+
+    // shake
+    let sx=0, sy=0;
+    if (shake>0){
+      sx = (Math.random()*2-1)*shake*0.3;
+      sy = (Math.random()*2-1)*shake*0.3;
+      shake *= 0.86;
+      if (shake<0.3) shake=0;
+    }
+    ctx.save();
+    ctx.translate(sx,sy);
+    drawGrid(now);
+    drawFood(now);
+    drawSnake(now);
+    drawParticles(now);
+    drawSlowMo(now);
+    ctx.restore();
+
+    requestAnimationFrame(tick);
+  }
+
+  // ----- Boot -----
+  playBtn.addEventListener('click', ()=>{
+    overlay.classList.add('hidden');
+    reset();
+  });
+  reset();
+  alive = false; // wait for play
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
